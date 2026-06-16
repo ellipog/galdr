@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getVersion } from "@tauri-apps/api/app";
 import { useGaldrStore } from "../store";
 import CustomSelect from "../components/CustomSelect";
 import { TRANSITION_OPTIONS } from "../transitions";
@@ -10,7 +12,12 @@ interface Props {
 }
 
 export default function SettingsPage({ onNavigate }: Props) {
-  const { outputDir, setOutputDir, transitionStyle, setTransitionStyle, triggerTransitionTest } = useGaldrStore();
+  const { outputDir, setOutputDir, transitionStyle, setTransitionStyle, triggerTransitionTest, setUpdateDismissed } = useGaldrStore();
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => setVersion("0.1.0"));
+  }, []);
 
   const pickFolder = async () => {
     const sel = await open({ directory: true, multiple: false });
@@ -57,6 +64,21 @@ export default function SettingsPage({ onNavigate }: Props) {
             ~/galdr/convert/batch
           </span>{" "}
           to use it.
+        </p>
+      </div>
+
+      <div className="card">
+        <label className="label">updates</label>
+        <p className="settings-hint">
+          current version: <strong>{version || "..."}</strong>
+        </p>
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="btn" onClick={() => setUpdateDismissed(false)}>
+            ᚠ check for updates
+          </button>
+        </div>
+        <p className="settings-hint" style={{ marginTop: 8 }}>
+          checks GitHub releases for newer versions on startup
         </p>
       </div>
 

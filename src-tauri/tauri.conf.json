@@ -32,5 +32,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/ellipog/galdr/releases/latest/download/update.json"],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVBNzY1QUI4QTQwNjE0MUQKUldRZEZBYWt1RnAyNnZ5dEgydWRTRjFER3NXWDQzbjArZTFuUVc2NnlmR0NRTnZkV0xmcktlaGoK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

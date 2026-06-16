@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 import HomePage from "./pages/HomePage";
 import ConvertPage from "./pages/ConvertPage";
 import BatchConvertPage from "./pages/BatchConvertPage";
 import SettingsPage from "./pages/SettingsPage";
 import ScrambleText from "./components/ScrambleText";
+import UpdateBanner from "./components/UpdateBanner";
 import PageTransition from "./transitions";
 import { useGaldrStore } from "./store";
 import "./App.css";
@@ -14,8 +16,13 @@ type Page = "home" | "convert" | "batch" | "settings";
 function App() {
   const [page, setPage] = useState<Page>("home");
   const [prevPage, setPrevPage] = useState<Page>("home");
+  const [appVersion, setAppVersion] = useState("");
   const transitionStyle = useGaldrStore((s) => s.transitionStyle);
   const win = getCurrentWindow();
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => setAppVersion("0.1.0"));
+  }, []);
 
   const handleSettings = () => {
     if (page === "settings") {
@@ -85,9 +92,11 @@ function App() {
           </span>
         ))}
         <span className="path-sep trail">/</span>
+        {appVersion && <span className="path-version">v{appVersion}</span>}
       </nav>
 
       <main className="main-content">
+        <UpdateBanner />
         <PageTransition style={transitionStyle} pageKey={page}>
           {page === "home" && <HomePage onNavigate={setPage} />}
           {page === "convert" && <ConvertPage />}

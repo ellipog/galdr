@@ -3,6 +3,8 @@ import type { MediaInfo, ConversionParams } from "../types";
 import type { TransitionStyle } from "../transitions";
 import { DEFAULT_TRANSITION } from "../transitions";
 
+export type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "downloaded" | "installing" | "error";
+
 interface GaldrState {
   mediaInfo: MediaInfo | null;
   conversionParams: ConversionParams;
@@ -14,6 +16,13 @@ interface GaldrState {
   outputDir: string;
   transitionStyle: TransitionStyle;
   testTransitionSignal: number;
+  crtEnabled: boolean;
+
+  updateStatus: UpdateStatus;
+  updateVersion: string | null;
+  updateNotes: string | null;
+  updateProgress: number;
+  updateDismissed: boolean;
 
   setMediaInfo: (info: MediaInfo | null) => void;
   setConversionParams: (params: Partial<ConversionParams>) => void;
@@ -24,8 +33,15 @@ interface GaldrState {
   setFfmpegFound: (v: boolean) => void;
   setOutputDir: (v: string) => void;
   setTransitionStyle: (v: TransitionStyle) => void;
+  setCrtEnabled: (v: boolean) => void;
   triggerTransitionTest: () => void;
   reset: () => void;
+
+  setUpdateStatus: (v: UpdateStatus) => void;
+  setUpdateVersion: (v: string | null) => void;
+  setUpdateNotes: (v: string | null) => void;
+  setUpdateProgress: (v: number) => void;
+  setUpdateDismissed: (v: boolean) => void;
 }
 
 const defaultParams: ConversionParams = {
@@ -53,6 +69,13 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   outputDir: "",
   transitionStyle: DEFAULT_TRANSITION,
   testTransitionSignal: 0,
+  crtEnabled: false,
+
+  updateStatus: "idle",
+  updateVersion: null,
+  updateNotes: null,
+  updateProgress: 0,
+  updateDismissed: false,
 
   setMediaInfo: (info) => set({ mediaInfo: info }),
   setConversionParams: (params) =>
@@ -66,6 +89,7 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   setFfmpegFound: (v) => set({ ffmpegFound: v }),
   setOutputDir: (v) => set({ outputDir: v }),
   setTransitionStyle: (v) => set({ transitionStyle: v }),
+  setCrtEnabled: (v) => set({ crtEnabled: v }),
   triggerTransitionTest: () => set((s) => ({ testTransitionSignal: s.testTransitionSignal + 1 })),
   reset: () =>
     set({
@@ -76,4 +100,10 @@ export const useGaldrStore = create<GaldrState>((set) => ({
       lastOutputPath: null,
       error: null,
     }),
+
+  setUpdateStatus: (v) => set({ updateStatus: v }),
+  setUpdateVersion: (v) => set({ updateVersion: v }),
+  setUpdateNotes: (v) => set({ updateNotes: v }),
+  setUpdateProgress: (v) => set({ updateProgress: v }),
+  setUpdateDismissed: (v) => set({ updateDismissed: v }),
 }));

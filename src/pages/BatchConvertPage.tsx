@@ -176,10 +176,7 @@ export default function BatchConvertPage() {
       });
       const top = mostCommonExtension(result, EXT_OPTIONS);
       if (top) setInputExt(top);
-      const filtered = top
-        ? result.filter((f) => f.name.toLowerCase().endsWith("." + top))
-        : result;
-      setFiles(filtered);
+      setFiles(result);
       setLog((p) => [...p, `> scanned ${result.length} files, auto-detected .${top}`]);
     } catch (e) {
       setError(String(e));
@@ -203,7 +200,7 @@ export default function BatchConvertPage() {
     try {
       const result = await invoke<ScannedFile[]>("scan_directory", {
         dir: inputDir,
-        extension: inputExt,
+        extension: "",
       });
       setFiles(result);
       setLog((p) => [...p, `> scanned ${result.length} files`]);
@@ -214,7 +211,7 @@ export default function BatchConvertPage() {
       setScanning(false);
       scanningRef.current = false;
     }
-  }, [inputDir, inputExt]);
+  }, [inputDir]);
 
   const prevDoneRef = useRef(0);
 
@@ -288,6 +285,11 @@ export default function BatchConvertPage() {
   const canScan = !!inputDir && !scanning;
   const canConvert = !!inputDir && !!outputDir && files.length > 0 && !converting;
   const totalSize = files.reduce((s, f) => s + f.size, 0);
+  const matchingCount = files.filter((f) => {
+    const dot = f.name.lastIndexOf(".");
+    if (dot < 0) return false;
+    return f.name.slice(dot + 1).toLowerCase() === inputExt;
+  }).length;
 
   return (
     <div
@@ -295,6 +297,9 @@ export default function BatchConvertPage() {
       onDragOver={(e) => e.preventDefault()}
     >
       <h2>ᚷ batch convert</h2>
+
+      <div className="batch-layout">
+        <div className="batch-left">
 
       <div className="card">
         <label className="label">input folder</label>
@@ -331,6 +336,7 @@ export default function BatchConvertPage() {
         </div>
       </div>
 
+      <div className="batch-scan-row">
       <button
         className="btn btn-primary"
         disabled={!canScan}
@@ -340,33 +346,7 @@ export default function BatchConvertPage() {
       >
         {scanning ? "scanning..." : <ScrambleText text="scan folder" trigger={scanBtnHover} ticks={4} />}
       </button>
-
-      {files.length > 0 && (
-        <div className="batch-file-list" ref={fileListRef}>
-          <div className="batch-file-hdr">
-            <span className="batch-file-count">{files.length} file{files.length !== 1 ? "s" : ""}</span>
-            <span className="batch-file-total">{fmtSize(totalSize)}</span>
-          </div>
-          {files.map((f, i) => {
-            const isActive = progress?.current_file === f.name && converting;
-            return (
-              <div
-                key={i}
-                ref={isActive ? activeRowRef : undefined}
-                className={`batch-file-row${isActive ? " active" : ""}`}
-                onClick={() => {
-                  const dot = f.name.lastIndexOf(".");
-                  if (dot >= 0) setInputExt(f.name.slice(dot + 1).toLowerCase());
-                }}
-                title={`filter by .${f.name.split(".").pop()?.toLowerCase() ?? ""}`}
-              >
-                <span className="batch-file-name">{f.name}</span>
-                <span className="batch-file-size">{fmtSize(f.size)}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
 
       {files.length > 0 && (
         <div className="convert-actions">
@@ -418,12 +398,52 @@ export default function BatchConvertPage() {
       )}
 
       {error && <div className="alert-error">! {error}</div>}
-
-      {log.length > 0 && (
-        <div className="log-panel">
-          {log.map((l, i) => <div key={i} className="log-line">{l}</div>)}
         </div>
-      )}
+
+        <div className="batch-right">
+          {files.length > 0 ? (
+            <>
+            <div className="batch-file-list" ref={fileListRef}>
+              <div className="batch-file-hdr">
+                <span className="batch-file-count">{files.length} file{files.length !== 1 ? "s" : ""} ({matchingCount} matching .{inputExt})</span>
+                <span className="batch-file-total">{fmtSize(totalSize)}</span>
+              </div>
+              {files.map((f, i) => {
+                const isActive = progress?.current_file === f.name && converting;
+                const dot = f.name.lastIndexOf(".");
+                const fileExt = dot >= 0 ? f.name.slice(dot + 1).toLowerCase() : "";
+                const isMatching = fileExt === inputExt;
+                return (
+                  <div
+                    key={i}
+                    ref={isActive ? activeRowRef : undefined}
+                    className={`batch-file-row${isActive ? " active" : ""}${!isMatching ? " dim" : ""}`}
+                    onClick={() => {
+                      if (dot >= 0) setInputExt(fileExt);
+                    }}
+                    title={`filter by .${fileExt || "?"}`}
+                  >
+                    <span className="batch-file-name">{f.name}</span>
+                    <span className="batch-file-size">{fmtSize(f.size)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {log.length > 0 && (
+              <div className="log-panel">
+                {log.map((l, i) => <div key={i} className="log-line">{l}</div>)}
+              </div>
+            )}
+            </>
+          ) : (
+            <div className="batch-empty">
+              <span className="batch-empty-rune">ᚱ</span>
+              <span className="batch-empty-text">select a folder and scan for files</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

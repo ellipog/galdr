@@ -298,6 +298,32 @@ body {
 }
 
 /* Batch Page */
+.batch-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.batch-left {
+  flex: 4 1 0;
+  min-width: 0;
+}
+
+.batch-right {
+  flex: 1 1 320px;
+  min-width: 0;
+  max-width: 380px;
+}
+
+.batch-scan-row {
+  display: flex;
+  width: 100%;
+}
+
+.batch-scan-row .btn {
+  flex: 1;
+}
+
 .batch-format-row {
   display: flex;
   gap: 12px;
@@ -314,7 +340,6 @@ body {
 }
 
 .batch-file-list {
-  margin-top: 16px;
   border: 1px solid var(--fg-faint);
   max-height: 240px;
   overflow-y: auto;
@@ -361,6 +386,14 @@ body {
   color: var(--fg);
 }
 
+.batch-file-row.dim .batch-file-name {
+  color: var(--fg-faint);
+}
+
+.batch-file-row.dim .batch-file-size {
+  color: var(--fg-faint);
+}
+
 .batch-file-name {
   font-size: 12px;
   color: var(--fg);
@@ -393,6 +426,29 @@ body {
   outline: 1px solid var(--fg);
   outline-offset: -12px;
   background: var(--bg-dim);
+}
+
+.batch-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  border: 1px dashed var(--fg-faint);
+  text-align: center;
+}
+
+.batch-empty-rune {
+  font-size: 28px;
+  color: var(--fg-faint);
+}
+
+.batch-empty-text {
+  font-size: 11px;
+  color: var(--fg-faint);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 /* Settings */
@@ -803,23 +859,131 @@ body {
   min-width: 0;
 }
 
-/* Media Info */
-.media-info {
+/* Version indicator in path-nav */
+.path-version {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fg-faint);
+  letter-spacing: 0.05em;
+  padding: 0 4px;
+  user-select: none;
+}
+
+/* Update Banner */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
   margin-bottom: 16px;
-  padding: 12px 16px;
-  border: 1px solid var(--fg-faint);
-  font-size: 12px;
-  color: var(--fg-dim);
-  line-height: 1.7;
+  border: 1px solid var(--fg);
+  background: var(--bg-dim);
 }
 
-.media-info .primary {
+.update-banner-rune {
+  font-size: 18px;
   color: var(--fg);
-  margin-bottom: 4px;
+  flex-shrink: 0;
 }
 
-.media-info .stream {
-  margin-top: 2px;
-  padding-left: 8px;
-  border-left: 1px solid var(--fg-faint);
+.update-banner-text {
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.update-banner-text strong {
+  color: var(--fg);
+  font-weight: 400;
+}
+
+.update-banner-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.update-banner-dismiss {
+  border-color: var(--fg-faint);
+  color: var(--fg-dim);
+}
+
+.update-banner-dismiss:hover {
+  background: var(--fg-faint);
+  color: var(--fg);
+}
+
+/* Update Overlay */
+.update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.update-modal {
+  background: var(--bg);
+  border: 1px solid var(--fg);
+  padding: 28px 32px;
+  min-width: 320px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.update-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-modal-rune {
+  font-size: 22px;
+  color: var(--fg);
+  flex-shrink: 0;
+}
+
+.update-modal-title {
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+.update-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.update-modal-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.update-modal-hint {
+  font-size: 11px;
+  color: var(--fg-dim);
+  letter-spacing: 0.05em;
+}
+
+.update-modal .progress-bar-container {
+  margin-top: 0;
+}
+
+.update-modal .progress-text {
+  text-align: center;
+}
+
+.update-modal .btn-primary {
+  flex: 1;
+  min-width: 0;
 }
