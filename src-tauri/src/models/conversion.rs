@@ -22,6 +22,8 @@ pub struct BatchConversionParams {
     pub output_dir: PathBuf,
     pub input_extension: String,
     pub output_format: String,
+    #[serde(default)]
+    pub skip: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

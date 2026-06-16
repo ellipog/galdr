@@ -118,6 +118,7 @@ export default function BatchConvertPage() {
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [skipCount, setSkipCount] = useState(0);
   const [scanBtnHover, setScanBtnHover] = useState(false);
   const [convBtnHover, setConvBtnHover] = useState(false);
   const scanningRef = useRef(false);
@@ -142,6 +143,12 @@ export default function BatchConvertPage() {
     }
   }, [inputExt, filteredFmt]);
 
+  useEffect(() => {
+    if (!converting && progress && (progress.done + progress.failed) > 0) {
+      setSkipCount(progress.done + progress.failed);
+    }
+  }, [converting]);
+
   const pickInput = async () => {
     const sel = await open({ directory: true, multiple: false });
     if (sel) loadDir(sel as string);
@@ -155,6 +162,7 @@ export default function BatchConvertPage() {
   const loadDir = useCallback(async (dir: string) => {
     setInputDir(dir);
     setOutputDir(dir.replace(/[\\/]+$/, "").replace(/\\/g, "/") + "/output");
+    setSkipCount(0);
     if (scanningRef.current) return;
     scanningRef.current = true;
     setScanning(true);
@@ -191,6 +199,7 @@ export default function BatchConvertPage() {
     setError(null);
     setFiles([]);
     setProgress(null);
+    setSkipCount(0);
     try {
       const result = await invoke<ScannedFile[]>("scan_directory", {
         dir: inputDir,
@@ -256,7 +265,7 @@ export default function BatchConvertPage() {
     setError(null);
     setLog(["> batch start"]);
     setProgress(null);
-    prevDoneRef.current = 0;
+    prevDoneRef.current = skipCount;
     try {
       await invoke("start_batch_conversion", {
         params: {
@@ -264,6 +273,7 @@ export default function BatchConvertPage() {
           output_dir: outputDir,
           input_extension: inputExt,
           output_format: outputFmt,
+          skip: skipCount,
         },
       });
       setLog((p) => [...p, "> batch done"]);
@@ -273,7 +283,7 @@ export default function BatchConvertPage() {
     } finally {
       setConverting(false);
     }
-  }, [inputDir, outputDir, inputExt, outputFmt, files]);
+  }, [inputDir, outputDir, inputExt, outputFmt, files, skipCount]);
 
   const canScan = !!inputDir && !scanning;
   const canConvert = !!inputDir && !!outputDir && files.length > 0 && !converting;

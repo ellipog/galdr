@@ -714,6 +714,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: stretch;
+  margin: 20px 0;
 }
 
 .btn-cancel {

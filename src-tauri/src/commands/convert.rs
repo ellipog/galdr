@@ -178,10 +178,11 @@ pub async fn start_batch_conversion(
 
     let mut done = 0usize;
     let mut failed = 0usize;
+    let done_offset = params.skip;
 
     CANCELLED.store(false, Ordering::SeqCst);
 
-    for input_path in &entries {
+    for input_path in entries.iter().skip(params.skip) {
         if CANCELLED.load(Ordering::SeqCst) {
             break;
         }
@@ -195,7 +196,7 @@ pub async fn start_batch_conversion(
             "batch-progress",
             BatchProgressPayload {
                 total,
-                done,
+                done: done + done_offset,
                 failed,
                 current_file: file_name.clone(),
                 file_progress: 0.0,
@@ -231,7 +232,7 @@ pub async fn start_batch_conversion(
                             "batch-progress",
                             BatchProgressPayload {
                                 total,
-                                done,
+                                done: done + done_offset,
                                 failed,
                                 current_file: file_name.clone(),
                                 file_progress: *p,
@@ -253,7 +254,7 @@ pub async fn start_batch_conversion(
                     "batch-progress",
                     BatchProgressPayload {
                         total,
-                        done,
+                        done: done + done_offset,
                         failed,
                         current_file: format!("{} — {}", file_name, e),
                         file_progress: 0.0,
@@ -267,7 +268,7 @@ pub async fn start_batch_conversion(
         "batch-progress",
         BatchProgressPayload {
             total,
-            done,
+            done: done + done_offset,
             failed,
             current_file: String::new(),
             file_progress: 1.0,

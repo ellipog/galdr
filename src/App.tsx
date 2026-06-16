@@ -53,7 +53,7 @@ function App() {
     <div className="app-shell">
       <header className="titlebar" data-tauri-drag-region>
         <div className="titlebar-left">
-          <button className="titlebar-btn titlebar-settings" onClick={() => setPage("settings")}>
+          <button className="titlebar-btn titlebar-settings" onClick={handleSettings}>
             <span className="ts-rune">ᚲ</span>
             <span className="ts-label">settings</span>
           </button>
