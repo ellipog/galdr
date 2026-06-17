@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
@@ -5,33 +6,40 @@ use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use discord_rich_presence::activity::{Activity, Assets, Timestamps};
 
 static CLIENT: once_cell::sync::OnceCell<Mutex<Option<DiscordIpcClient>>> = once_cell::sync::OnceCell::new();
+static ENABLED: AtomicBool = AtomicBool::new(true);
+
+pub fn set_enabled(enabled: bool) {
+    ENABLED.store(enabled, Ordering::SeqCst);
+    if !enabled {
+        disconnect();
+    }
+}
 
 fn get_client() -> &'static Mutex<Option<DiscordIpcClient>> {
     CLIENT.get_or_init(|| Mutex::new(None))
 }
 
 pub fn connect(client_id: &str) {
-    match DiscordIpcClient::new(client_id) {
-        Ok(client) => {
-            if client.connect().is_ok() {
-                if let Ok(mut guard) = get_client().lock() {
-                    *guard = Some(client);
-                }
-            }
+    let mut client = DiscordIpcClient::new(client_id);
+    if client.connect().is_ok() {
+        if let Ok(mut guard) = get_client().lock() {
+            *guard = Some(client);
         }
-        Err(_) => {}
     }
 }
 
 pub fn disconnect() {
     if let Ok(mut guard) = get_client().lock() {
-        if let Some(client) = guard.take() {
+        if let Some(mut client) = guard.take() {
             let _ = client.close();
         }
     }
 }
 
 fn set_activity(activity: Activity<'_>) {
+    if !ENABLED.load(Ordering::SeqCst) {
+        return;
+    }
     if let Ok(mut guard) = get_client().lock() {
         if let Some(client) = guard.as_mut() {
             let _ = client.set_activity(activity);

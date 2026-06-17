@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
 import { useGaldrStore } from "../store";
@@ -12,12 +13,25 @@ interface Props {
 }
 
 export default function SettingsPage({ onNavigate }: Props) {
-  const { outputDir, setOutputDir, transitionStyle, setTransitionStyle, triggerTransitionTest, setUpdateDismissed, showRuneInTitlebar, setShowRuneInTitlebar } = useGaldrStore();
+  const {
+    outputDir, setOutputDir,
+    transitionStyle, setTransitionStyle,
+    triggerTransitionTest,
+    setUpdateDismissed,
+    showRuneInTitlebar, setShowRuneInTitlebar,
+    discordEnabled, setDiscordEnabled,
+  } = useGaldrStore();
   const [version, setVersion] = useState("");
 
   useEffect(() => {
     getVersion().then(setVersion).catch(() => setVersion("0.1.0"));
   }, []);
+
+  const toggleDiscord = useCallback(() => {
+    const next = !discordEnabled;
+    setDiscordEnabled(next);
+    invoke("set_discord_enabled", { enabled: next }).catch(() => {});
+  }, [discordEnabled, setDiscordEnabled]);
 
   const pickFolder = async () => {
     const sel = await open({ directory: true, multiple: false });
@@ -116,6 +130,20 @@ export default function SettingsPage({ onNavigate }: Props) {
           </div>
         </div>
       )}
+      <div className="card">
+        <label className="label">Discord Rich Presence</label>
+        <div className="row">
+          <p className="settings-hint" style={{ flex: 1, margin: 0 }}>
+            show what you&rsquo;re doing on your Discord profile
+          </p>
+          <button
+            className={`btn toggle-btn${discordEnabled ? " active" : ""}`}
+            onClick={toggleDiscord}
+          >
+            {discordEnabled ? "on" : "off"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

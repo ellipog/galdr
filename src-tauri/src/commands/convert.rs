@@ -96,6 +96,7 @@ pub async fn start_conversion(
     }
 
     discord_rpc::set_idle();
+    Err("Conversion produced no output".to_string())
 }
 
 #[tauri::command]
@@ -228,6 +229,8 @@ pub async fn start_batch_conversion(
             },
         );
 
+        discord_rpc::set_batch(&file_name, done + done_offset + 1, total, 0.0);
+
         let duration = probe_file(input_path)
             .map(|info| info.duration)
             .unwrap_or(0.0);
@@ -266,6 +269,7 @@ pub async fn start_batch_conversion(
             for event in &events {
                 match event {
                     crate::ffmpeg::FfmpegEvent::Progress(p) => {
+                        discord_rpc::set_batch(&file_name, done + done_offset + 1, total, *p);
                         let _ = app_handle.emit(
                             "batch-progress",
                             BatchProgressPayload {
@@ -310,6 +314,8 @@ pub async fn start_batch_conversion(
         }
     }
 
+    discord_rpc::set_idle();
+
     let _ = app_handle.emit(
         "batch-progress",
         BatchProgressPayload {
@@ -322,6 +328,19 @@ pub async fn start_batch_conversion(
     );
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn update_discord_presence(page: String) {
+    match page.as_str() {
+        "home" => discord_rpc::set_idle(),
+        _ => discord_rpc::set_browsing(&page),
+    }
+}
+
+#[tauri::command]
+pub fn set_discord_enabled(enabled: bool) {
+    discord_rpc::set_enabled(enabled);
 }
 
 #[tauri::command]

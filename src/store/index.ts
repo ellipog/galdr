@@ -30,6 +30,7 @@ interface GaldrState {
 
   runeTags: RuneTag[];
   showRuneInTitlebar: boolean;
+  discordEnabled: boolean;
 
   setMediaInfo: (info: MediaInfo | null) => void;
   setConversionParams: (params: Partial<ConversionParams>) => void;
@@ -55,6 +56,7 @@ interface GaldrState {
   setUpdateDismissed: (v: boolean) => void;
   setRuneTags: (tags: RuneTag[]) => void;
   setShowRuneInTitlebar: (v: boolean) => void;
+  setDiscordEnabled: (v: boolean) => void;
 }
 
 const defaultParams: ConversionParams = {
@@ -108,6 +110,7 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   updateDismissed: false,
   runeTags: [],
   showRuneInTitlebar: true,
+  discordEnabled: true,
 
   setMediaInfo: (info) => set({ mediaInfo: info }),
   setConversionParams: (params) =>
@@ -143,4 +146,5 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   setUpdateDismissed: (v) => set({ updateDismissed: v }),
   setRuneTags: (tags) => set({ runeTags: tags }),
   setShowRuneInTitlebar: (v) => set({ showRuneInTitlebar: v }),
+  setDiscordEnabled: (v) => set({ discordEnabled: v }),
 }));

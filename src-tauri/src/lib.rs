@@ -35,12 +35,8 @@ pub fn run() {
             commands::delete_rune_tag,
             commands::apply_rune_tag,
             commands::update_discord_presence,
+            commands::set_discord_enabled,
         ])
-        .on_event(|_app, event| {
-            if let tauri::RunEvent::Exit = event {
-                discord_rpc::disconnect();
-            }
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

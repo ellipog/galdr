@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, ProgressBarStatus, UserAttentionType } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import HomePage from "./pages/HomePage";
@@ -31,6 +32,10 @@ function App() {
   useEffect(() => {
     getVersion().then(setAppVersion).catch(() => setAppVersion("0.1.0"));
   }, []);
+
+  useEffect(() => {
+    invoke("update_discord_presence", { page }).catch(() => {});
+  }, [page]);
 
   useEffect(() => {
     const title = taskbarAction ? `GALDR - ${taskbarAction}` : "GALDR";
