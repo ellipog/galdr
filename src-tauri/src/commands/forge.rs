@@ -182,3 +182,18 @@ pub async fn save_project_file(path: String, content: String) -> Result<(), Stri
 pub async fn load_project_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
 }
+
+/// Reads file bytes up to 200MB. Used for video preview blob URLs.
+/// Limits to prevent OOM on huge files.
+#[tauri::command]
+pub async fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
+    let max_bytes: u64 = 200 * 1024 * 1024;
+    let metadata = std::fs::metadata(&path).map_err(|e| format!("Cannot access file: {}", e))?;
+    if metadata.len() > max_bytes {
+        return Err(format!(
+            "File too large for preview ({} MB). Max is 200 MB.",
+            metadata.len() / (1024 * 1024)
+        ));
+    }
+    std::fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))
+}

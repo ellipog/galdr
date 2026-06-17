@@ -41,6 +41,7 @@ pub fn run() {
             commands::cancel_forge_export,
             commands::save_project_file,
             commands::load_project_file,
+            commands::read_file_bytes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

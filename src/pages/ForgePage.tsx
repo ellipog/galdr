@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import VideoPreview from "../components/forge/VideoPreview";
@@ -29,6 +29,9 @@ export default function ForgePage() {
   const addToLibrary = useForgeStore((s) => s.addToLibrary);
   const addClipToVideo = useForgeStore((s) => s.addClipToVideo);
   const addClipToAudio = useForgeStore((s) => s.addClipToAudio);
+
+  const [previewHeight, setPreviewHeight] = useState(360);
+  const [resizing, setResizing] = useState(false);
 
   const selectedClip =
     project.videoTrack.clips.find((c) => c.selected) ||
@@ -128,8 +131,7 @@ export default function ForgePage() {
     return () => { unlistenDrop?.(); };
   }, [addToLibrary]);
 
-  // Custom pointer-based drag from SourceBrowser to Timeline.
-  // Bypasses HTML5 DnD entirely — uses raw pointer events + elementFromPoint.
+  // Custom pointer-based drag from SourceBrowser to Timeline
   useEffect(() => {
     let ghost: HTMLElement | null = null;
     let cleanTracks = () => {
@@ -147,7 +149,6 @@ export default function ForgePage() {
       ghost.style.top = `${e.clientY + 14}px`;
       ghost.textContent = "add clip";
 
-      // Hit-test under cursor (hide ghost so it doesn't block elementFromPoint)
       ghost.style.display = "none";
       const el = document.elementFromPoint(e.clientX, e.clientY);
       ghost.style.display = "";
@@ -165,14 +166,12 @@ export default function ForgePage() {
 
       if (!payload) return;
 
-      // Find track under cursor
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const trackEl = el?.closest("[data-track]");
       if (!trackEl) return;
 
       const track = trackEl.getAttribute("data-track") as "video" | "audio";
 
-      // Calculate timeline position from ruler
       const ruler = document.querySelector(".forge-ruler");
       const scrollContainer = document.querySelector(".forge-timeline-body");
       if (!ruler) return;
@@ -180,7 +179,8 @@ export default function ForgePage() {
       const rulerRect = ruler.getBoundingClientRect();
       const scrollLeft = scrollContainer?.scrollLeft || 0;
       const zoom = useForgeStore.getState().project.zoomLevel;
-      const px = e.clientX - rulerRect.left + scrollLeft - 16 - 48; // PADDING + TRACK_LABEL_WIDTH
+      // PADDING only (labels are in a separate fixed column, not in the scrollable area)
+      const px = e.clientX - rulerRect.left + scrollLeft - 16;
       const time = Math.max(0, px / zoom);
 
       const addFn = track === "video" ? addClipToVideo : addClipToAudio;
@@ -206,6 +206,32 @@ export default function ForgePage() {
       if (ghost) { ghost.remove(); }
     };
   }, [addClipToVideo, addClipToAudio]);
+
+  // Preview resize handlers
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    setResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!resizing) return;
+    const pageEl = document.querySelector(".forge-page");
+    if (!pageEl) return;
+    const pageRect = pageEl.getBoundingClientRect();
+
+    const onMove = (e: PointerEvent) => {
+      const h = Math.max(140, Math.min(600, e.clientY - pageRect.top));
+      setPreviewHeight(h);
+    };
+    const onUp = () => setResizing(false);
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [resizing]);
 
   const handleCast = useCallback(async () => {
     try {
@@ -240,12 +266,21 @@ export default function ForgePage() {
 
   return (
     <div className="forge-page">
-      <div className="forge-top">
+      <div className="forge-top" style={{ flex: "none" }}>
         <SourceBrowser />
         <div className="forge-center">
-          <VideoPreview />
+          <div className="forge-preview" style={{ height: previewHeight }}>
+            <VideoPreview />
+          </div>
           <PropertiesPanel />
         </div>
+      </div>
+
+      <div
+        className={`forge-resize-handle${resizing ? " active" : ""}`}
+        onPointerDown={handleResizeStart}
+      >
+        <div className="forge-resize-handle-line" />
       </div>
 
       <div className="forge-bottom">

@@ -11,8 +11,7 @@
 /* Top section: source | preview+properties */
 .forge-top {
   display: flex;
-  flex: 1;
-  min-height: 0;
+  flex-shrink: 0;
   border-bottom: 1px solid var(--fg-faint);
 }
 
@@ -25,11 +24,11 @@
 
 /* Bottom section: toolbar + timeline */
 .forge-bottom {
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--fg-faint);
-  max-height: 45vh;
 }
 
 .forge-bottom-bar {
@@ -260,10 +259,8 @@
 
 /* ── Video Preview ── */
 .forge-preview {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   border-bottom: 1px solid var(--fg-faint);
 }
 
@@ -275,6 +272,7 @@
   background: var(--bg);
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .forge-preview-video {
@@ -282,6 +280,26 @@
   max-height: 100%;
   display: block;
   object-fit: contain;
+}
+
+.forge-preview-video.error {
+  opacity: 0.3;
+}
+
+.forge-preview-error-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.forge-preview-error-text {
+  font-size: 11px;
+  color: #ff6b6b;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .forge-preview-placeholder {
@@ -300,6 +318,10 @@
   align-items: center;
   justify-content: center;
   background: var(--bg-dim);
+}
+
+.forge-preview-placeholder-frame.error {
+  border-color: #8b0000;
 }
 
 .forge-preview-placeholder-inner {
@@ -466,6 +488,12 @@
   min-width: 0;
 }
 
+.forge-prop-input:disabled {
+  color: var(--fg-faint);
+  border-bottom-color: transparent;
+  cursor: default;
+}
+
 .forge-prop-input:focus {
   border-bottom-color: var(--fg);
 }
@@ -482,6 +510,10 @@
 
 .forge-prop-value.dim {
   color: var(--fg-dim);
+}
+
+.forge-prop-value.dim.faint {
+  color: var(--fg-faint);
 }
 
 .forge-prop-suffix {
@@ -841,4 +873,35 @@
   background: rgba(200, 200, 200, 0.04);
   outline: 1px solid var(--fg-dim);
   outline-offset: -1px;
+}
+
+/* ── Resize Handle ── */
+.forge-resize-handle {
+  flex-shrink: 0;
+  height: 4px;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  transition: background 0.15s;
+}
+
+.forge-resize-handle:hover,
+.forge-resize-handle.active {
+  background: var(--bg-dim);
+}
+
+.forge-resize-handle-line {
+  width: 60px;
+  height: 2px;
+  background: var(--fg-faint);
+  border-radius: 0;
+  transition: background 0.15s, width 0.15s;
+}
+
+.forge-resize-handle:hover .forge-resize-handle-line,
+.forge-resize-handle.active .forge-resize-handle-line {
+  background: var(--fg-dim);
+  width: 80px;
 }
