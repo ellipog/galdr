@@ -309,10 +309,61 @@ export default function CompressPage() {
     ]);
   }, [show, log]);
 
+  const handleCompressFfmpegAlertContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "retry detection", rune: "ᛏ", action: () => invoke<boolean>("detect_ffmpeg").then(setFfmpegFound) },
+      { label: "copy message", rune: "ᚷ", action: () => navigator.clipboard.writeText("ffmpeg not found on PATH") },
+    ]);
+  }, [show, setFfmpegFound]);
+
+  const handleQualitySliderContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy value (${Math.round(quality * 100)}%)`, rune: "ᚷ", action: () => navigator.clipboard.writeText(`${Math.round(quality * 100)}%`) },
+      { label: "reset to 50%", rune: "ᛏ", action: () => setQuality(0.5) },
+      { label: "set to 100%", rune: "ᚨ", action: () => setQuality(1) },
+      { label: "set to 0%", rune: "ᚷ", action: () => setQuality(0) },
+    ]);
+  }, [show, quality, setQuality]);
+
+  const handleCompressFormatCardContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy format (${outputFormat})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(outputFormat) },
+      { label: "reset to mp4", rune: "ᛏ", action: () => setOutputFormat("mp4") },
+    ]);
+  }, [show, outputFormat, setOutputFormat]);
+
+  const handleCompressAlertContext = useCallback((e: React.MouseEvent, msg: string) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "copy message", rune: "ᚷ", action: () => navigator.clipboard.writeText(msg) },
+    ]);
+  }, [show]);
+
+  const handleCompressErrorContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!error) return;
+    show(e, [
+      { label: "copy error", rune: "ᚷ", action: () => navigator.clipboard.writeText(error) },
+      { label: "dismiss", rune: "ᚨ", action: () => setError(null) },
+    ]);
+  }, [show, error, setError]);
+
+  const handleCompressProgressContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isConverting) return;
+    show(e, [
+      { label: "cancel", rune: "ᛏ", action: () => invoke("cancel_conversion") },
+      { label: `copy progress (${Math.round(conversionProgress * 100)}%)`, rune: "ᚷ", action: () => navigator.clipboard.writeText(`${Math.round(conversionProgress * 100)}%`) },
+    ]);
+  }, [show, isConverting, conversionProgress]);
+
   return (
     <div className="page">
       {!ffmpegFound && (
-        <div className="alert-error">! ffmpeg not found on PATH</div>
+        <div className="alert-error" onContextMenu={handleCompressFfmpegAlertContext}>! ffmpeg not found on PATH</div>
       )}
 
       <div
@@ -360,11 +411,13 @@ export default function CompressPage() {
 
       <ScrambleText as="div" className="rune-divider" text="ᛟ ᛟ ᛟ ᛟ ᛟ" hover ticks={4} />
 
-      <QualitySlider
-        label="quality"
-        value={quality}
-        onChange={setQuality}
-      />
+      <div onContextMenu={handleQualitySliderContext}>
+        <QualitySlider
+          label="quality"
+          value={quality}
+          onChange={setQuality}
+        />
+      </div>
 
       {estimate && (
         <div className={`estimate-bar${sizeIncrease ? " estimate-warn" : ""}`} onContextMenu={handleEstimateContext}>
@@ -379,7 +432,7 @@ export default function CompressPage() {
         </div>
       )}
 
-      <div className="card">
+      <div className="card" onContextMenu={handleCompressFormatCardContext}>
         <label className="label">output format</label>
         <CustomSelect
           options={filteredOptions}
@@ -389,18 +442,18 @@ export default function CompressPage() {
       </div>
 
       {estimate && !estimate.can_compress && !sizeIncrease && (
-        <div className="alert-warn">
+        <div className="alert-warn" onContextMenu={(e) => handleCompressAlertContext(e, "this combination may not reduce size — lowering quality or switching to a lossy format will help")}>
           ( this combination may not reduce size — lowering quality or switching to a lossy format will help )
         </div>
       )}
 
       {sizeIncrease && (
-        <div className="alert-warn">
+        <div className="alert-warn" onContextMenu={(e) => handleCompressAlertContext(e, `estimated output is larger than source — lower quality or switch to a more efficient format`)}>
           ! estimated output is larger than source — lower quality or switch to a more efficient format
         </div>
       )}
 
-      {error && <div className="alert-error">! {error}</div>}
+      {error && <div className="alert-error" onContextMenu={handleCompressErrorContext}>! {error}</div>}
 
       <div className="convert-actions">
         <button
@@ -420,7 +473,7 @@ export default function CompressPage() {
       </div>
 
       {isConverting && (
-        <div className="progress-bar-container">
+        <div className="progress-bar-container" onContextMenu={handleCompressProgressContext}>
           <div className="progress-bar" style={{ width: `${conversionProgress * 100}%` }} />
           <span className="progress-text">{Math.round(conversionProgress * 100)}%</span>
         </div>

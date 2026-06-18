@@ -525,6 +525,31 @@ export default function VideoPreview() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${ms}`;
   };
 
+  const handleResolutionContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy (${fmtW}×${fmtH})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(`${fmtW}x${fmtH}`) },
+    ]);
+  }, [show, fmtW, fmtH]);
+
+  const handleTimeDisplayContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy (${formatTime(playheadTime)})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(formatTime(playheadTime)) },
+      { label: "go to start", rune: "ᛏ", action: () => seek(0) },
+    ]);
+  }, [show, playheadTime, seek, formatTime]);
+
+  const handleEmptyPlaceholderContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "import media", rune: "ᚨ", action: () => {
+        const store = useForgeStore.getState();
+        store.importMediaFiles();
+      }},
+    ]);
+  }, [show]);
+
   return (
     <div className="forge-preview-inner" onContextMenu={handlePreviewContext}>
       <div className="forge-preview-canvas">
@@ -560,7 +585,7 @@ export default function VideoPreview() {
               style={{ display: "none" }}
             />
             <div className="forge-preview-format-overlay" />
-            <div className="forge-preview-format-label">
+            <div className="forge-preview-format-label" onContextMenu={handleResolutionContext}>
               {fmtW}×{fmtH}
             </div>
           </div>
@@ -574,7 +599,7 @@ export default function VideoPreview() {
             </div>
           </div>
         ) : (
-          <div className="forge-preview-placeholder">
+          <div className="forge-preview-placeholder" onContextMenu={handleEmptyPlaceholderContext}>
             <div className="forge-preview-placeholder-frame">
               <div className="forge-preview-placeholder-inner">
                 <span className="forge-preview-placeholder-rune">ᚲ</span>
@@ -608,7 +633,7 @@ export default function VideoPreview() {
           >
             ⏭
           </button>
-          <span className="forge-transport-time">
+          <span className="forge-transport-time" onContextMenu={handleTimeDisplayContext}>
             {formatTime(playheadTime)}
           </span>
           <span className="forge-transport-sep">/</span>

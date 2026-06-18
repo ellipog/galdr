@@ -143,6 +143,21 @@ function AppShell() {
     ]);
   }, [show, setPage]);
 
+  const handlePathNavContext = useCallback((e: React.MouseEvent, target: Page, label: string) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `navigate to ${label}`, rune: "ᛏ", action: () => setPage(target) },
+    ]);
+  }, [show, setPage]);
+
+  const handleVersionContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy (v${appVersion})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(appVersion) },
+      { label: "check for updates", rune: "ᚠ", action: () => useGaldrStore.getState().setUpdateDismissed(false) },
+    ]);
+  }, [show, appVersion]);
+
   return (
     <div className="app-shell" onContextMenu={handleGlobalContextMenu}>
       <header className="titlebar" data-tauri-drag-region>
@@ -178,13 +193,14 @@ function AppShell() {
             <span
               className={`path-seg${i === pathSegs.length - 1 ? " active" : ""}`}
               onClick={() => seg.target !== page && setPage(seg.target)}
+              onContextMenu={(e) => handlePathNavContext(e, seg.target, seg.label)}
             >
               {seg.label}
             </span>
           </span>
         ))}
         <span className="path-sep trail">/</span>
-        {appVersion && <span className="path-version">v{appVersion}</span>}
+        {appVersion && <span className="path-version" onContextMenu={handleVersionContext}>v{appVersion}</span>}
       </nav>
 
       <main className="main-content">

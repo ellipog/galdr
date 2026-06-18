@@ -303,6 +303,52 @@ export default function BatchConvertPage() {
     ]);
   }, [show]);
 
+  const handleBatchExtCardContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy (${inputExt})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(inputExt) },
+      { label: "reset to mp4", rune: "ᛏ", action: () => setInputExt("mp4") },
+    ]);
+  }, [show, inputExt, setInputExt]);
+
+  const handleBatchFmtCardContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy (${outputFmt})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(outputFmt) },
+      { label: "reset to mp4", rune: "ᛏ", action: () => setOutputFmt("mp4") },
+    ]);
+  }, [show, outputFmt, setOutputFmt]);
+
+  const handleBatchProgressContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!progress) return;
+    const summary = `${progress.done + progress.failed} / ${progress.total} files (${progress.failed} failed)`;
+    show(e, [
+      ...(converting ? [{ label: "cancel batch", rune: "ᛏ", action: () => invoke("cancel_conversion") }] : []),
+      { label: "copy summary", rune: "ᚷ", action: () => navigator.clipboard.writeText(summary) },
+    ]);
+  }, [show, progress, converting]);
+
+  const handleBatchEmptyContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "browse folder", rune: "ᚨ", action: pickInput },
+      { label: "paste path", rune: "ᚷ", action: async () => {
+        const text = await navigator.clipboard.readText();
+        if (text) loadDirRef.current(text);
+      }},
+    ]);
+  }, [show, pickInput]);
+
+  const handleBatchErrorContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!error) return;
+    show(e, [
+      { label: "copy error", rune: "ᚷ", action: () => navigator.clipboard.writeText(error) },
+      { label: "dismiss", rune: "ᚨ", action: () => setError(null) },
+    ]);
+  }, [show, error]);
+
   return (
     <div
       className={`page batch-page${isDragOver ? " dragging" : ""}`}
@@ -330,7 +376,7 @@ export default function BatchConvertPage() {
       </div>
 
       <div className="batch-format-row">
-        <div className="card batch-card">
+        <div className="card batch-card" onContextMenu={handleBatchExtCardContext}>
           <label className="label">input extension</label>
           <Dropdown
             options={EXT_OPTIONS}
@@ -339,7 +385,7 @@ export default function BatchConvertPage() {
             showCategories
           />
         </div>
-        <div className="card batch-card">
+        <div className="card batch-card" onContextMenu={handleBatchFmtCardContext}>
           <label className="label">output format</label>
           <Dropdown
             options={FMT_OPTIONS}
@@ -383,7 +429,7 @@ export default function BatchConvertPage() {
       )}
 
       {progress && (
-        <div className="card">
+        <div className="card" onContextMenu={handleBatchProgressContext}>
           <label className="label">progress</label>
           <div className="batch-progress-info">
             {progress.done + progress.failed} / {progress.total} files
@@ -412,7 +458,7 @@ export default function BatchConvertPage() {
         </div>
       )}
 
-      {error && <div className="alert-error">! {error}</div>}
+      {error && <div className="alert-error" onContextMenu={handleBatchErrorContext}>! {error}</div>}
         </div>
 
         <div className="batch-right">
@@ -465,7 +511,7 @@ export default function BatchConvertPage() {
             )}
             </>
           ) : (
-            <div className="batch-empty">
+            <div className="batch-empty" onContextMenu={handleBatchEmptyContext}>
               <span className="batch-empty-rune">ᚱ</span>
               <span className="batch-empty-text">select a folder and scan for files</span>
             </div>

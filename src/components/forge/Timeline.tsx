@@ -310,6 +310,24 @@ export default function Timeline() {
     ]);
   }, [show, project, addMarker, removeMarker]);
 
+  const handleZoomLabelContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: `copy (${zoom} px/s)`, rune: "ᚷ", action: () => navigator.clipboard.writeText(`${zoom} px/s`) },
+      { label: "reset to 100", rune: "ᛏ", action: () => setZoom(100) },
+      { label: "zoom to fit", rune: "ᚨ", action: () => {
+        const maxDur = Math.max(
+          ...project.videoTrack.clips.map((c) => c.startTime + c.duration),
+          ...project.audioTrack.clips.map((c) => c.startTime + c.duration),
+          1
+        );
+        const containerW = scrollRef.current?.clientWidth || 800;
+        const fitZoom = Math.max(20, Math.min(500, Math.floor((containerW - 64) / maxDur)));
+        setZoom(fitZoom);
+      }},
+    ]);
+  }, [show, zoom, setZoom, project]);
+
   return (
     <div
       className="forge-timeline"
@@ -321,7 +339,7 @@ export default function Timeline() {
         <button className="forge-tl-btn" onClick={() => setZoom(zoom - 20)} title="Zoom out">
           ◁ zoom
         </button>
-        <span className="forge-tl-zoom-label">{zoom} px/s</span>
+        <span className="forge-tl-zoom-label" onContextMenu={handleZoomLabelContext}>{zoom} px/s</span>
         <button className="forge-tl-btn" onClick={() => setZoom(zoom + 20)} title="Zoom in">
           zoom ▷
         </button>

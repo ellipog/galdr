@@ -45,9 +45,40 @@ export default function SourceBrowser() {
     ]);
   }, [show, addClipToVideo, addClipToAudio, removeFromLibrary]);
 
+  const handlePanelHeaderContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "import media", rune: "ᚨ", action: importMediaFiles },
+      ...(mediaLibrary.length > 0 ? [{ label: "clear library", rune: "ᚷ", action: () => mediaLibrary.forEach((item) => removeFromLibrary(item.id)) }] : []),
+    ]);
+  }, [show, importMediaFiles, mediaLibrary, removeFromLibrary]);
+
+  const handleEmptyContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "import media", rune: "ᚨ", action: importMediaFiles },
+      { label: "paste path", rune: "ᚷ", action: async () => {
+        const text = await navigator.clipboard.readText();
+        if (!text) return;
+        try {
+          const info = await invoke<{ duration: number; width?: number; height?: number }>("get_media_info", { path: text });
+          const name = text.split(/[/\\]/).pop() || text;
+          useForgeStore.getState().addToLibrary({
+            id: crypto.randomUUID(), name, path: text,
+            duration: (info as any).duration || 0, width: (info as any).width, height: (info as any).height,
+          });
+        } catch {
+          useForgeStore.getState().addToLibrary({
+            id: crypto.randomUUID(), name: text.split(/[/\\]/).pop() || text, path: text, duration: 0,
+          });
+        }
+      }},
+    ]);
+  }, [show, importMediaFiles]);
+
   return (
     <div className="forge-source">
-      <div className="forge-panel-header">
+      <div className="forge-panel-header" onContextMenu={handlePanelHeaderContext}>
         <span className="forge-panel-title">ᚨ source</span>
         <button className="forge-source-import-btn" onClick={importMediaFiles}>
           + import
@@ -55,7 +86,7 @@ export default function SourceBrowser() {
       </div>
       <div className="forge-source-list">
         {mediaLibrary.length === 0 && (
-          <div className="forge-source-empty">
+          <div className="forge-source-empty" onContextMenu={handleEmptyContext}>
             <span className="forge-source-empty-text">no media imported</span>
             <span className="forge-source-empty-hint">click + import or drag files in</span>
           </div>

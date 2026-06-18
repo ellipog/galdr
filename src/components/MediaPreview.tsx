@@ -1,9 +1,11 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { invoke } from "@tauri-apps/api/core";
 import type { MediaInfo } from "../types";
 import ImageComparison from "./ImageComparison";
 import VideoComparison from "./VideoComparison";
 import AudioComparison from "./AudioComparison";
+import { useContextMenu } from "./ContextMenu";
 
 interface Props {
   originalPath: string;
@@ -34,6 +36,7 @@ export default function MediaPreview({
 }: Props) {
   const [open, setOpen] = useState(false);
   const toggle = useCallback(() => setOpen((v) => !v), []);
+  const { show } = useContextMenu();
 
   const mt = detectMediaType(originalInfo);
 
@@ -41,8 +44,19 @@ export default function MediaPreview({
     ? `-${Math.round((1 - compressedInfo.size / originalInfo.size) * 100)}%`
     : `+${Math.round((compressedInfo.size / originalInfo.size - 1) * 100)}%`;
 
+  const handlePreviewContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "toggle preview", rune: "ᛏ", action: toggle },
+      { label: `copy delta (${pct})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(pct) },
+      { label: "", rune: "", action: () => {}, divider: true },
+      { label: "open original in folder", rune: "ᚨ", action: () => invoke("reveal_in_folder", { path: originalPath }).catch(() => {}) },
+      { label: "open compressed in folder", rune: "ᛏ", action: () => invoke("reveal_in_folder", { path: compressedPath }).catch(() => {}) },
+    ]);
+  }, [show, toggle, pct, originalPath, compressedPath]);
+
   return (
-    <div className="media-preview">
+    <div className="media-preview" onContextMenu={handlePreviewContext}>
       <button className="preview-toggle" onClick={toggle}>
         <span className={`preview-toggle-arrow${open ? " open" : ""}`}>▸</span>
         <span className="preview-toggle-label">before / after preview</span>

@@ -256,10 +256,55 @@ export default function ConvertPage() {
     ]);
   }, [show]);
 
+  const handleFfmpegAlertContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "retry detection", rune: "ᛏ", action: () => invoke<boolean>("detect_ffmpeg").then(setFfmpegFound) },
+      { label: "copy message", rune: "ᚷ", action: () => navigator.clipboard.writeText("ffmpeg not found on PATH") },
+    ]);
+  }, [show, setFfmpegFound]);
+
+  const handleFormatCardContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const cur = conversionParams.output_format;
+    show(e, [
+      { label: `copy format (${cur})`, rune: "ᚷ", action: () => navigator.clipboard.writeText(cur) },
+      { label: "reset to mp4", rune: "ᛏ", action: () => setConversionParams({ output_format: "mp4" }) },
+    ]);
+  }, [show, conversionParams.output_format, setConversionParams]);
+
+  const handleOutputPathContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!outputDir || !mediaType) return;
+    const path = `${outputDir}/${mediaType}/`;
+    show(e, [
+      { label: "copy path", rune: "ᚷ", action: () => navigator.clipboard.writeText(path) },
+      { label: "open in explorer", rune: "ᛏ", action: () => invoke("reveal_in_folder", { path: outputDir }).catch(() => {}) },
+    ]);
+  }, [show, outputDir, mediaType]);
+
+  const handleErrorAlertContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!error) return;
+    show(e, [
+      { label: "copy error", rune: "ᚷ", action: () => navigator.clipboard.writeText(error) },
+      { label: "dismiss", rune: "ᚨ", action: () => setError(null) },
+    ]);
+  }, [show, error, setError]);
+
+  const handleProgressContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isConverting) return;
+    show(e, [
+      { label: "cancel conversion", rune: "ᛏ", action: () => invoke("cancel_conversion") },
+      { label: `copy progress (${Math.round(conversionProgress * 100)}%)`, rune: "ᚷ", action: () => navigator.clipboard.writeText(`${Math.round(conversionProgress * 100)}%`) },
+    ]);
+  }, [show, isConverting, conversionProgress]);
+
   return (
     <div className="page">
       {!ffmpegFound && (
-        <div className="alert-error">! ffmpeg not found on PATH</div>
+        <div className="alert-error" onContextMenu={handleFfmpegAlertContext}>! ffmpeg not found on PATH</div>
       )}
 
       <div
@@ -307,7 +352,7 @@ export default function ConvertPage() {
 
       <ScrambleText as="div" className="rune-divider" text="ᛟ ᛟ ᛟ ᛟ ᛟ" hover ticks={4} />
 
-      <div className="card">
+      <div className="card" onContextMenu={handleFormatCardContext}>
         <label className="label">output format</label>
         <Dropdown
           options={FORMAT_OPTIONS}
@@ -319,13 +364,13 @@ export default function ConvertPage() {
       </div>
 
       {mediaType && outputDir && (
-        <div className="card">
+        <div className="card" onContextMenu={handleOutputPathContext}>
           <span className="label">output path</span>
           <span className="path-preview">{outputDir}/{mediaType}/</span>
         </div>
       )}
 
-      {error && <div className="alert-error">! {error}</div>}
+      {error && <div className="alert-error" onContextMenu={handleErrorAlertContext}>! {error}</div>}
 
       <div className="convert-actions">
         <button
@@ -345,7 +390,7 @@ export default function ConvertPage() {
       </div>
 
       {isConverting && (
-        <div className="progress-bar-container">
+        <div className="progress-bar-container" onContextMenu={handleProgressContext}>
           <div className="progress-bar" style={{ width: `${conversionProgress * 100}%` }} />
           <span className="progress-text">{Math.round(conversionProgress * 100)}%</span>
         </div>

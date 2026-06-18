@@ -71,6 +71,22 @@ export default function SettingsPage({ onNavigate }: Props) {
     ]);
   }, [show, discordEnabled, toggleDiscord]);
 
+  const handleSubfolderContext = useCallback((e: React.MouseEvent, sub: string) => {
+    e.stopPropagation();
+    const path = `${outputDir}/${sub}/`;
+    show(e, [
+      { label: "copy path", rune: "ᚷ", action: () => navigator.clipboard.writeText(path) },
+      { label: "open in explorer", rune: "ᛏ", action: () => invoke("reveal_in_folder", { path }).catch(() => {}) },
+    ]);
+  }, [show, outputDir]);
+
+  const handleBatchSectionContext = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    show(e, [
+      { label: "navigate to batch", rune: "ᛏ", action: () => onNavigate("batch") },
+    ]);
+  }, [show, onNavigate]);
+
   return (
     <div className="page">
       <h2>ᚲ settings</h2>
@@ -93,7 +109,7 @@ export default function SettingsPage({ onNavigate }: Props) {
           <label className="label">auto-created subfolders</label>
           <div className="settings-subs">
             {SUBFOLDERS.map((sf) => (
-              <div key={sf} className="settings-sub">
+              <div key={sf} className="settings-sub" onContextMenu={(e) => handleSubfolderContext(e, sf)}>
                 <span className="settings-sub-name">{sf}/</span>
                 <span className="settings-sub-path">{outputDir}/{sf}/</span>
               </div>
@@ -102,7 +118,7 @@ export default function SettingsPage({ onNavigate }: Props) {
         </div>
       )}
 
-      <div className="card">
+      <div className="card" onContextMenu={handleBatchSectionContext}>
         <label className="label">batch conversion</label>
         <p className="settings-hint">
           batch mode uses its own input and output folders independent of this setting.
