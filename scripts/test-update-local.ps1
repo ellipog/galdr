@@ -1,4 +1,4 @@
-# Prepares local update artifacts for end-to-end testing using a local HTTP server.
+﻿# Prepares local update artifacts for end-to-end testing using a local HTTP server.
 # Run this FIRST, then follow the printed instructions.
 
 $ErrorActionPreference = "Stop"
@@ -21,13 +21,13 @@ $testVersion = "$($segments[0]).$([int]$segments[1] + 1).0"
 Write-Host "Current version: $version" -ForegroundColor Cyan
 Write-Host "Test update version: $testVersion" -ForegroundColor Cyan
 
-$msiZip = "$root\src-tauri\target\release\bundle\msi\galdr_${version}_x64_en-US.msi.zip"
-$msiFile = "$root\src-tauri\target\release\bundle\msi\galdr_${version}_x64_en-US.msi"
+$nsisZip = "$root\src-tauri\target\release\bundle\nsis\galdr_${version}_x64-setup.exe.zip"
+$nsisExe = "$root\src-tauri\target\release\bundle\nsis\galdr_${version}_x64-setup.exe"
 $keyPath = "$root\src-tauri\updater.key"
 $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
 
 # ── Build (if no existing archive) ──────────────────────────────────
-if (-not (Test-Path $msiZip)) {
+if (-not (Test-Path $nsisZip)) {
     Write-Host "`n[1/3] No existing archive — building..." -ForegroundColor Cyan
     Push-Location $root
     bun tauri build
@@ -37,14 +37,14 @@ if (-not (Test-Path $msiZip)) {
     Write-Host "`n[1/3] Using existing archive" -ForegroundColor Cyan
 }
 
-# Create .msi.zip if only .msi exists
-if (-not (Test-Path $msiZip) -and (Test-Path $msiFile)) {
-    Write-Host "Creating .msi.zip from existing .msi..." -ForegroundColor Yellow
-    Compress-Archive -Path $msiFile -DestinationPath $msiZip -Force
+# Create .exe.zip if only .exe exists
+if (-not (Test-Path $nsisZip) -and (Test-Path $nsisExe)) {
+    Write-Host "Creating .exe.zip from existing installer..." -ForegroundColor Yellow
+    Compress-Archive -Path $nsisExe -DestinationPath $nsisZip -Force
 }
 
-if (-not (Test-Path $msiZip)) {
-    Write-Host "! No archive found at $msiZip" -ForegroundColor Red
+if (-not (Test-Path $nsisZip)) {
+    Write-Host "! No archive found at $nsisZip" -ForegroundColor Red
     Write-Host "  Build the app first: bun tauri build"
     exit 1
 }
@@ -53,12 +53,12 @@ if (-not (Test-Path $msiZip)) {
 Write-Host "[2/3] Signing archive..." -ForegroundColor Cyan
 $sigOutput = & bun x tauri signer sign `
     --private-key-path "$keyPath" `
-    "$msiZip" 2>&1 | Out-String
+    "$nsisZip" 2>&1 | Out-String
 
 if ($LASTEXITCODE -ne 0) {
     $sigOutput = & bun run tauri signer sign `
         --private-key-path "$keyPath" `
-        "$msiZip" 2>&1 | Out-String
+        "$nsisZip" 2>&1 | Out-String
 }
 
 $signature = ($sigOutput -split "`n" | Where-Object { $_ -match "^(dW50cn|RW)" } | Select-Object -First 1).Trim()
@@ -73,7 +73,7 @@ Write-Host "  Signature captured" -ForegroundColor Green
 Write-Host "[3/3] Generating test update.json..." -ForegroundColor Cyan
 
 # URL path relative to repo root (where the HTTP server runs)
-$zipRelPath = "src-tauri/target/release/bundle/msi/galdr_${version}_x64_en-US.msi.zip"
+$zipRelPath = "src-tauri/target/release/bundle/nsis/galdr_${version}_x64-setup.exe.zip"
 $zipUrl = "http://127.0.0.1:8080/$zipRelPath"
 
 $testJson = @"
@@ -95,7 +95,7 @@ Write-Host "`n================================================================" 
 Write-Host "  TEST UPDATE ARTIFACTS READY" -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Archive:         $msiZip"
+Write-Host "Archive:         $nsisZip"
 Write-Host "Test config:     $root\update.test.json"
 Write-Host ""
 Write-Host "STEP-BY-STEP INSTRUCTIONS:" -ForegroundColor Yellow
@@ -129,8 +129,8 @@ Write-Host ""
 Write-Host "  TIP: Delete update.test.json when you're done:"
 Write-Host "    Remove-Item update.test.json"
 Write-Host ""
-Write-Host "  TIP: To also test the install step, actually install a low-version MSI"
-Write-Host "  first (build with '0.0.1', run the MSI), then point it at the HTTP server."
+Write-Host "  TIP: To also test the install step, actually install a low-version build"
+Write-Host "  first (build with '0.0.1', run the installer), then point it at the HTTP server."
 Write-Host ""
 Write-Host "  DEBUG: Verify the server is working:"
 Write-Host "    curl http://127.0.0.1:8080/update.test.json"

@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Default name="VScrollBar" value="button1normalimage='public\vsrcollbar\vscrollbtn.png' button1hotimage='public\vsrcollbar\vscrollbtn_hot.png' button1pushedimage='public\vsrcollbar\vscrollbtn_hot.png' thumnormalimage='public\vsrcollbar\vscrollbar.png' thumbhotimage='public\vsrcollbar\vscrollbar_hot.png' thumbpushedimage='public\vsrcollbar\vscrollbar_hot.png' />

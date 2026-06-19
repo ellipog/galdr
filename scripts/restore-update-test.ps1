@@ -1,4 +1,4 @@
-# Restores tauri.conf.json after local update testing.
+﻿# Restores tauri.conf.json after local update testing.
 # Run this after test-update-local.ps1 to clean up.
 
 $ErrorActionPreference = "Stop"

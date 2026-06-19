@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VerticalLayout name="licenseshow" visible="false" float="true" bkimage="file='form\license_bg.png'" pos="25,30,458,370">
+  <Label name="licensename" text="GNU GENERAL PUBLIC LICENSE V3.0" font="1" textcolor="#FFC8C8C8" height="30" padding="15,15,15,0" />
+  <RichEdit name="editLicense" width="418" height="250" readonly="true" font="4" textcolor="#FFC8C8C8" vscrollbar="true" autohscroll="false" padding="15,5,15,0" />
+  <Container height="10" />
+  <HorizontalLayout height="36" padding="15,0,15,15">
+    <Button name="btnLicClose" font="6" text="CLOSE" textcolor="#FFC8C8C8" width="80" height="30" normalimage="form\btn_secondary_normal.png" hotimage="form\btn_secondary_hover.png" pushedimage="form\btn_secondary_pressed.png" />
+  </HorizontalLayout>
+</VerticalLayout>

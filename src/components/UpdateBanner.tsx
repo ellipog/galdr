@@ -17,6 +17,10 @@ export default function UpdateBanner() {
   const updateRef = useRef<Update | null>(null);
   const [downloadedBytes, setDownloadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState<number | undefined>(undefined);
+  // Live, mutable reference to the total size so the download progress
+  // callback (created once at download start) always reads the latest value.
+  // Using state inside the callback would capture a stale `undefined`.
+  const totalBytesRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (updateDismissed) return;
@@ -71,16 +75,19 @@ export default function UpdateBanner() {
     setUpdateStatus("downloading");
     setDownloadedBytes(0);
     setTotalBytes(undefined);
+    totalBytesRef.current = undefined;
     try {
       await u.download((event: DownloadEvent) => {
         if (event.event === "Started") {
+          totalBytesRef.current = event.data.contentLength;
           setTotalBytes(event.data.contentLength);
           setDownloadedBytes(0);
         } else if (event.event === "Progress") {
           setDownloadedBytes((prev) => {
             const next = prev + event.data.chunkLength;
-            if (totalBytes) {
-              setUpdateProgress(Math.min(100, Math.round((next / totalBytes) * 100)));
+            const total = totalBytesRef.current;
+            if (total) {
+              setUpdateProgress(Math.min(100, Math.round((next / total) * 100)));
             }
             return next;
           });
@@ -93,7 +100,7 @@ export default function UpdateBanner() {
       setUpdateError(e instanceof Error ? e.message : String(e));
       setUpdateStatus("error");
     }
-  }, [totalBytes]);
+  }, []);
 
   const handleInstall = useCallback(async () => {
     const u = updateRef.current;
@@ -109,6 +116,12 @@ export default function UpdateBanner() {
     setUpdateStatus("installing");
     try {
       await u.install();
+      // On a successful install the updater exits the app to run the
+      // installer, so the UI below rarely re-renders — but reset the
+      // dismissed flag anyway so a future session can prompt again if the
+      // install didn't actually complete (e.g. user cancelled the installer).
+      setUpdateDismissed(false);
+      setUpdateError(null);
     } catch (e) {
       setUpdateError(e instanceof Error ? e.message : String(e));
       setUpdateStatus("error");

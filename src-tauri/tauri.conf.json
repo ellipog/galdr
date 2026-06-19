@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "galdr",
-  "version": "0.2.0",
+  "version": "0.0.1",
   "identifier": "com.ellio.galdr",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "python src-tauri/windows/nsniuniuskin/prepare-nsis.py && bun run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -22,7 +22,9 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     }
   },
@@ -39,18 +41,23 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["galdr"],
+        "ext": [
+          "galdr"
+        ],
         "name": "Galdr Project",
         "description": "Galdr video editor project file"
       }
     ],
+    "licenseFile": "windows/LICENSE.txt",
     "resources": [
       "binaries/*"
     ],
     "windows": {
       "wix": null,
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "template": "./windows/nsniuniuskin/installer.nsi",
+        "installerIcon": "icons/icon.ico"
       }
     },
     "macOS": {
@@ -68,7 +75,9 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://github.com/ellipog/galdr/releases/latest/download/update.json"],
+      "endpoints": [
+        "https://github.com/ellipog/galdr/releases/latest/download/update.json"
+      ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVBNzY1QUI4QTQwNjE0MUQKUldRZEZBYWt1RnAyNnZ5dEgydWRTRjFER3NXWDQzbjArZTFuUVc2NnlmR0NRTnZkV0xmcktlaGoK",
       "windows": {
         "installMode": "passive"

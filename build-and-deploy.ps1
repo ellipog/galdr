@@ -1,4 +1,4 @@
-# Builds the Tauri app and generates the updater signature.
+﻿# Builds the Tauri app and generates the updater signature.
 # Run after `build-ffmpeg.ps1` (downloads FFmpeg binaries).
 
 $ErrorActionPreference = "Stop"
@@ -36,39 +36,47 @@ if ($conf -match '"version"\s*:\s*"([^"]+)"') {
 }
 Write-Host "Version: $version" -ForegroundColor Cyan
 
-$msiZip = "$root\src-tauri\target\release\bundle\msi\galdr_${version}_x64_en-US.msi.zip"
-$msiFile = "$root\src-tauri\target\release\bundle\msi\galdr_${version}_x64_en-US.msi"
+$nsisExe = "$root\src-tauri\target\release\bundle\nsis\galdr_${version}_x64-setup.exe"
+$nsisZip = "$root\src-tauri\target\release\bundle\nsis\galdr_${version}_x64-setup.exe.zip"
 $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
-$url = "https://github.com/ellipog/galdr/releases/download/v$version/galdr_${version}_x64_en-US.msi.zip"
+$url = "https://github.com/ellipog/galdr/releases/download/v$version/galdr_${version}_x64-setup.exe.zip"
+
+# ── 0. Generate installer skin assets ──────────────────────────
+Write-Host "`n[0/4] Generating nsNiuniuSkin installer assets..." -ForegroundColor Cyan
+python "$root\src-tauri\windows\nsniuniuskin\generate-assets.py"
+python "$root\src-tauri\windows\nsniuniuskin\generate-skin-zip.py"
 
 # ── 1. Build ────────────────────────────────────────────────────────
 Write-Host "`n[1/4] Building Tauri app..." -ForegroundColor Cyan
+Write-Host "Installing dependencies..." -ForegroundColor DarkGray
+bun install
+if (-not $?) { exit 1 }
 bun tauri build
 if (-not $?) { exit 1 }
 
-# ── 2. Create .msi.zip if missing ──────────────────────────────────
+# ── 2. Create .exe.zip if missing ──────────────────────────────────
 Write-Host "`n[2/4] Preparing archive..." -ForegroundColor Cyan
-if (-not (Test-Path $msiZip)) {
-    if (-not (Test-Path $msiFile)) {
-        Write-Host "! No .msi found at $msiFile" -ForegroundColor Red
+if (-not (Test-Path $nsisZip)) {
+    if (-not (Test-Path $nsisExe)) {
+        Write-Host "! No NSIS installer found at $nsisExe" -ForegroundColor Red
         exit 1
     }
-    Write-Host "Creating .msi.zip..."
-    Compress-Archive -Path $msiFile -DestinationPath $msiZip -Force
+    Write-Host "Creating .exe.zip..."
+    Compress-Archive -Path $nsisExe -DestinationPath $nsisZip -Force
 }
-$zipSize = (Get-Item $msiZip).Length / 1MB
-Write-Host "Archive: $msiZip ($([math]::Round($zipSize, 1)) MB)"
+$zipSize = (Get-Item $nsisZip).Length / 1MB
+Write-Host "Archive: $nsisZip ($([math]::Round($zipSize, 1)) MB)"
 
 # ── 3. Sign ─────────────────────────────────────────────────────────
 Write-Host "`n[3/4] Signing archive..." -ForegroundColor Cyan
 $sigOutput = & bun x tauri signer sign `
     --private-key-path "$keyPath" `
-    "$msiZip" 2>&1 | Out-String
+    "$nsisZip" 2>&1 | Out-String
 
 if ($LASTEXITCODE -ne 0) {
     $sigOutput = & bun run tauri signer sign `
         --private-key-path "$keyPath" `
-        "$msiZip" 2>&1 | Out-String
+        "$nsisZip" 2>&1 | Out-String
 }
 
 # Extract just the signature line (starts with dW50cn... or RW...)
@@ -106,7 +114,7 @@ Write-Host "---" -ForegroundColor DarkGray
 # Verify archive is a valid zip
 Write-Host "`nVerifying archive..." -ForegroundColor Cyan
 try {
-    $zip = [System.IO.Compression.ZipFile]::OpenRead($msiZip)
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($nsisZip)
     $entryCount = $zip.Entries.Count
     $zip.Dispose()
     Write-Host "  Archive is valid zip ($entryCount entries)" -ForegroundColor Green
@@ -136,10 +144,9 @@ try {
 
 Write-Host "`nDone!" -ForegroundColor Green
 Write-Host "Artifacts:" -ForegroundColor Cyan
-Get-ChildItem -Path "$root\src-tauri\target\release\bundle\msi\" -Name
 Get-ChildItem -Path "$root\src-tauri\target\release\bundle\nsis\" -Name
 
 Write-Host "`nNext steps:" -ForegroundColor Yellow
-Write-Host "  1. Upload galdr_${version}_x64_en-US.msi.zip to GitHub release v$version"
+Write-Host "  1. Upload galdr_${version}_x64-setup.exe.zip to GitHub release v$version"
 Write-Host "  2. Upload update.json to the same release"
 Write-Host "  3. Tag the release as 'latest'"

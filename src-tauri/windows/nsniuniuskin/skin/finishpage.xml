@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Windows>
+  <VerticalLayout name="finishpage" inset="0,0,0,0">
+    <Control height="80" />
+    <Control width="64" height="64" bkimage="file='form\logo.png'" padding="30,0,0,0" />
+    <Label text="INSTALLATION COMPLETE" font="2" textcolor="#FFC8C8C8" padding="30,15,30,0" height="36" />
+    <Label text="GALDR HAS BEEN INSTALLED ON YOUR COMPUTER." font="3" textcolor="#FFC8C8C8" padding="30,5,30,0" height="20" />
+    <Control />
+    <HorizontalLayout height="40" padding="30,0,30,30">
+      <CheckBox name="chkRunApp" font="5" text="RUN GALDR" textcolor="#FFC8C8C8" selected="true" height="24" align="left" valign="center" textpadding="22,0,0,0" normalimage="file='public\checkbox\chk_normal.png' dest='0,4,16,16'" normalhotimage="file='public\checkbox\chk_hover.png' dest='0,4,16,16'" selectedimage="file='public\checkbox\chk_checked.png' dest='0,4,16,16'" selectedhotimage="file='public\checkbox\chk_checked.png' dest='0,4,16,16'" disabledimage="file='public\checkbox\chk_disabled.png' dest='0,4,16,16'" />
+      <Control />
+      <Button name="btnRun" width="120" height="36" text="FINISH" font="1" textcolor="#FFC8C8C8" normalimage="form\btn_primary_normal.png" hotimage="form\btn_primary_hover.png" pushedimage="form\btn_primary_pressed.png" />
+    </HorizontalLayout>
+  </VerticalLayout>
+</Windows>

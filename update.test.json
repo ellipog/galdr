@@ -1,0 +1,11 @@
+﻿{
+  "version": "0.3.0",
+  "notes": "Local test update",
+  "pub_date": "2026-06-19T19:39:11Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRZEZBYWt1RnAyNnZvaFEraWZSYy9WK2lhMWZlZGlRSmJhaWRsZ2xNelhCbXhhRCthQ2pyckNXL2N3bElrWnZkVENaeUd5WjdXeWlZWXcrZU5EVm1rWDFyOUlTNnY0SEEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxODkwNzUxCWZpbGU6Z2FsZHJfMC4yLjFfeDY0LXNldHVwLmV4ZS56aXAKalV2dnBIWXZjSTQzQml4ZzFkMDRFYXZQYjdackVsb1dOY3NSKzVPZ21WR0lOVVJzL1BWVStBWUFSTnN2dEZtYi9lekszR3d5TlZscnpmc0IxZ1IvRHc9PQo=",
+      "url": "http://127.0.0.1:8080/src-tauri/target/release/bundle/nsis/galdr_0.2.1_x64-setup.exe.zip"
+    }
+  }
+}

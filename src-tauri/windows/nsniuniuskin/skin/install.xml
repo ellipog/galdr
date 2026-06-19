@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window size="508,418" sizebox="0,0,0,0" caption="0,0,0,418" minbox="0" maxbox="0" bktrans="true">
+  <Font id="0" name="Courier New" size="11" default="true" />
+  <Font id="1" name="Courier New" size="11" bold="true" />
+  <Font id="2" name="Courier New" size="18" bold="true" />
+  <Font id="3" name="Courier New" size="10" />
+  <Font id="4" name="Consolas" size="10" />
+  <Font id="5" name="Courier New" size="10" />
+  <Font id="6" name="Courier New" size="9" />
+  <Include source="default.xml" />
+  <VerticalLayout bkimage="file='form\install_bg.png'" inset="0,0,0,0">
+    <TabLayout name="wizardTab">
+      <Include source="configpage.xml" />
+      <Include source="installingpage.xml" />
+      <Include source="finishpage.xml" />
+      <Include source="uninstallpage.xml" />
+      <Include source="uninstallingpage.xml" />
+      <Include source="uninstallfinishpage.xml" />
+    </TabLayout>
+    <HorizontalLayout float="true" inset="0,8,8,0" pos="0,0,492,36" height="36">
+      <Container />
+      <Button name="btnFinishedMin" width="28" height="28" bkimage="public\caption\min_normal.png" hotbkimage="public\caption\min_hover.png" pushedbkimage="public\caption\min_pressed.png" />
+      <Control width="4" />
+      <Button name="btnClose" width="28" height="28" bkimage="public\caption\close_normal.png" hotbkimage="public\caption\close_hover.png" pushedbkimage="public\caption\close_pressed.png" />
+    </HorizontalLayout>
+  </VerticalLayout>
+</Window>

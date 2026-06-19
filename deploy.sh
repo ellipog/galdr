@@ -35,10 +35,9 @@ fi
 CONFIRMED="$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*: *"\(.*\)".*/\1/')"
 echo "  (tauri.conf.json version: $CONFIRMED)"
 
-# Remove stale MSI from prior runs so the new build can't be confused
-rm -f src-tauri/target/release/bundle/msi/*.msi
-rm -f src-tauri/target/release/bundle/msi/*.msi.zip
-rm -f src-tauri/target/release/bundle/msi/*.exe
+# Remove stale NSIS installers from prior runs so the new build can't be confused
+rm -f src-tauri/target/release/bundle/nsis/*.exe
+rm -f src-tauri/target/release/bundle/nsis/*.exe.zip
 
 # ── Platform detection ──────────────────────────────────────────────
 OS="$(uname -s)"
@@ -125,6 +124,15 @@ else
   echo "✓ FFmpeg binaries present"
 fi
 
+# ── Generate installer skin assets ──────────────────────────
+echo "⟳ Generating nsNiuniuSkin installer assets ..."
+if command -v python3 &>/dev/null; then
+  PY=python3
+else
+  PY=python
+fi
+(cd "$ROOT/src-tauri/windows/nsniuniuskin" && $PY generate-assets.py && $PY generate-skin-zip.py)
+
 # ── Build ───────────────────────────────────────────────────────────
 echo "⟳ Building galdr v$VERSION ..."
 bun install
@@ -132,17 +140,17 @@ bun tauri build
 echo "✓ Build complete."
 
 # ── Locate artifacts & create archive ─────────────────────────────────
-echo "  Checking for artifacts in src-tauri/target/release/bundle/msi/ ..."
-ls -la src-tauri/target/release/bundle/msi/ 2>/dev/null || echo "  (no msi dir yet)"
+echo "  Checking for artifacts in src-tauri/target/release/bundle/nsis/ ..."
+ls -la src-tauri/target/release/bundle/nsis/ 2>/dev/null || echo "  (no nsis dir yet)"
 case "$PLATFORM" in
   windows)
-    BUNDLE_DIR="src-tauri/target/release/bundle/msi"
+    BUNDLE_DIR="src-tauri/target/release/bundle/nsis"
     INSTALLER=""
-    for f in "$BUNDLE_DIR"/*.msi; do
+    for f in "$BUNDLE_DIR"/*.exe; do
       [ -f "$f" ] && INSTALLER="$f" && break
     done
     if [ -z "$INSTALLER" ]; then
-      echo "! No .msi found in $BUNDLE_DIR/ — check build output."
+      echo "! No .exe found in $BUNDLE_DIR/ — check build output."
       exit 1
     fi
     ARCHIVE="${INSTALLER}.zip"

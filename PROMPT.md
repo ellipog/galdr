@@ -390,7 +390,7 @@ Filter assets by filename to assign to OS cards:
 
 | OS | Asset name pattern |
 |---|---|
-| Windows | `.msi` or `-setup.exe` |
+| Windows | `-setup.exe` |
 | macOS | `.dmg` |
 | Linux | `.AppImage` or `.deb` |
 

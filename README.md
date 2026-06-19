@@ -64,7 +64,7 @@ This starts a Vite dev server on port 1420 and opens the Tauri window.
 ./deploy.sh [new_version]
 ```
 
-`deploy.sh` handles: version bumping → platform-specific FFmpeg download → `bun tauri build` → artifact packaging (.msi.zip, .tar.gz, .dmg.gz) → signing → `update.json` generation with multi-platform merge support.
+`deploy.sh` handles: version bumping → platform-specific FFmpeg download → `bun tauri build` → artifact packaging (.exe.zip, .tar.gz, .dmg.gz) → signing → `update.json` generation with multi-platform merge support.
 
 ---
 
@@ -92,7 +92,7 @@ Step-by-step guide to build and release a new version of galdr.
 3. **Build the Tauri app** — `.\build-and-deploy.ps1` runs `bun tauri build` and creates the installer
 4. **Sign the archive** — the script prompts for a signature via `bun tauri signer sign --private-key-path src-tauri/updater.key <archive>`
 5. **Upload to GitHub** — create a release tagged `v{version}` and upload:
-   - The installer archive (`.msi.zip` for Windows, `.dmg` for macOS, `.AppImage` or `.deb` for Linux)
+   - The installer archive (`.exe.zip` for Windows, `.dmg` for macOS, `.AppImage` or `.deb` for Linux)
    - The generated `update.json`
 6. **Publish the release** — the in-app updater checks `releases/latest/download/update.json` automatically
 
@@ -129,7 +129,7 @@ src-tauri/              # Backend (Rust)
 
 | Platform | Installer | Updater |
 |----------|-----------|---------|
-| Windows x86_64 | MSI / NSIS | ✅ `.msi.zip` |
+| Windows x86_64 | NSIS (.exe) | ✅ `.exe.zip` |
 | macOS (Intel / Apple Silicon) | DMG | ✅ |
 | Linux (x86_64 / aarch64) | AppImage / .deb | ✅ |
 

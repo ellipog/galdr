@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Windows>
+  <VerticalLayout name="uninstallfinishpage" inset="0,0,0,0">
+    <Control height="80" />
+    <Control width="64" height="64" bkimage="file='form\logo.png'" padding="30,0,0,0" />
+    <Label name="uninstallsuccessfully" text="GALDR HAS BEEN UNINSTALLED" font="2" textcolor="#FFC8C8C8" padding="30,15,30,0" height="36" />
+    <Label text="ALL GALDR FILES HAVE BEEN REMOVED." font="3" textcolor="#FFC8C8C8" padding="30,5,30,0" height="20" />
+    <Control />
+    <HorizontalLayout height="50" padding="30,0,30,30">
+      <Control />
+      <Button name="btnUninstalled" width="120" height="36" text="FINISH" font="1" textcolor="#FFC8C8C8" normalimage="form\btn_primary_normal.png" hotimage="form\btn_primary_hover.png" pushedimage="form\btn_primary_pressed.png" />
+    </HorizontalLayout>
+  </VerticalLayout>
+</Windows>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window size="400,200" sizebox="0,0,0,0" caption="0,0,0,200" minbox="0" maxbox="0" bktrans="true">
+  <Font id="0" name="Courier New" size="11" default="true" />
+  <Font id="1" name="Courier New" size="11" bold="true" />
+  <Font id="2" name="Courier New" size="10" />
+  <VerticalLayout bkimage="file='form\install_bg.png'" inset="15,15,15,15">
+    <Label name="lblTitle" text="ALERT" font="1" textcolor="#FFC8C8C8" height="30" />
+    <Text name="lblMsg" font="0" textcolor="#FFC8C8C8" height="90" padding="0,5,0,0" />
+    <HorizontalLayout height="36">
+      <Container />
+      <Button name="btnOK" width="80" height="30" text="OK" font="1" textcolor="#FFC8C8C8" normalimage="form\btn_secondary_normal.png" hotimage="form\btn_secondary_hover.png" pushedimage="form\btn_secondary_pressed.png" />
+      <Container width="10" visible="false" name="cancelSpacer">
+        <Button name="btnCancel" width="80" height="30" text="CANCEL" font="0" textcolor="#FFC8C8C8" normalimage="form\btn_secondary_normal.png" hotimage="form\btn_secondary_hover.png" pushedimage="form\btn_secondary_pressed.png" />
+      </Container>
+    </HorizontalLayout>
+  </VerticalLayout>
+</Window>
