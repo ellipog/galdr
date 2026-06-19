@@ -11,6 +11,7 @@ export default function UpdateBanner() {
     updateVersion, setUpdateVersion,
     updateProgress, setUpdateProgress,
     updateDismissed, setUpdateDismissed,
+    updateError, setUpdateError,
   } = useGaldrStore();
 
   const updateRef = useRef<Update | null>(null);
@@ -20,6 +21,7 @@ export default function UpdateBanner() {
   useEffect(() => {
     if (updateDismissed) return;
     setUpdateStatus("checking");
+    setUpdateError(null);
     check({ timeout: 10000 })
       .then((u) => {
         if (u) {
@@ -87,7 +89,8 @@ export default function UpdateBanner() {
         }
       });
       setUpdateStatus("downloaded");
-    } catch {
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : String(e));
       setUpdateStatus("error");
     }
   }, [totalBytes]);
@@ -106,7 +109,8 @@ export default function UpdateBanner() {
     setUpdateStatus("installing");
     try {
       await u.install();
-    } catch {
+    } catch (e) {
+      setUpdateError(e instanceof Error ? e.message : String(e));
       setUpdateStatus("error");
     }
   }, []);
@@ -114,6 +118,7 @@ export default function UpdateBanner() {
   const handleDismiss = useCallback(() => {
     setUpdateDismissed(true);
     setUpdateStatus("idle");
+    setUpdateError(null);
   }, []);
 
   const formatBytes = (b: number) => {
@@ -194,7 +199,9 @@ export default function UpdateBanner() {
 
             {updateStatus === "error" && (
               <div className="update-modal-actions">
-                <span className="update-modal-hint">something went wrong</span>
+                <span className="update-modal-hint">
+                  {updateError || "something went wrong"}
+                </span>
                 <button className="btn" onClick={handleDismiss}>
                   close
                 </button>

@@ -25,3 +25,4 @@ dist-ssr
 
 # Updater signing key (private)
 src-tauri/updater.key
+src-tauri/.env

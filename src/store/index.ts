@@ -27,6 +27,7 @@ interface GaldrState {
   updateNotes: string | null;
   updateProgress: number;
   updateDismissed: boolean;
+  updateError: string | null;
 
   runeTags: RuneTag[];
   showRuneInTitlebar: boolean;
@@ -54,6 +55,7 @@ interface GaldrState {
   setUpdateNotes: (v: string | null) => void;
   setUpdateProgress: (v: number) => void;
   setUpdateDismissed: (v: boolean) => void;
+  setUpdateError: (v: string | null) => void;
   setRuneTags: (tags: RuneTag[]) => void;
   setShowRuneInTitlebar: (v: boolean) => void;
   setDiscordEnabled: (v: boolean) => void;
@@ -108,6 +110,7 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   updateNotes: null,
   updateProgress: 0,
   updateDismissed: false,
+  updateError: null,
   runeTags: [],
   showRuneInTitlebar: true,
   discordEnabled: true,
@@ -144,6 +147,7 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   setUpdateNotes: (v) => set({ updateNotes: v }),
   setUpdateProgress: (v) => set({ updateProgress: v }),
   setUpdateDismissed: (v) => set({ updateDismissed: v }),
+  setUpdateError: (v) => set({ updateError: v }),
   setRuneTags: (tags) => set({ runeTags: tags }),
   setShowRuneInTitlebar: (v) => set({ showRuneInTitlebar: v }),
   setDiscordEnabled: (v) => set({ discordEnabled: v }),

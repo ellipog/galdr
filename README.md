@@ -68,6 +68,40 @@ This starts a Vite dev server on port 1420 and opens the Tauri window.
 
 ---
 
+## Updating
+
+Step-by-step guide to build and release a new version of galdr.
+
+### Windows (PowerShell)
+
+```powershell
+.\build-ffmpeg.ps1
+.\build-and-deploy.ps1
+```
+
+### Cross-platform (Git Bash / Linux / macOS)
+
+```bash
+./deploy.sh [new_version]
+```
+
+### Steps
+
+1. **Bump the version** in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` (or pass the version to `deploy.sh` — it handles this automatically)
+2. **Download FFmpeg binaries** — `.\build-ffmpeg.ps1` fetches the static build for your platform
+3. **Build the Tauri app** — `.\build-and-deploy.ps1` runs `bun tauri build` and creates the installer
+4. **Sign the archive** — the script prompts for a signature via `bun tauri signer sign --private-key-path src-tauri/updater.key <archive>`
+5. **Upload to GitHub** — create a release tagged `v{version}` and upload:
+   - The installer archive (`.msi.zip` for Windows, `.dmg` for macOS, `.AppImage` or `.deb` for Linux)
+   - The generated `update.json`
+6. **Publish the release** — the in-app updater checks `releases/latest/download/update.json` automatically
+
+### Multi-platform releases
+
+Build on each platform separately using `deploy.sh [version]`. Each run merges its platform entry into `update.json` automatically.
+
+---
+
 ## Project Structure
 
 ```
