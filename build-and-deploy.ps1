@@ -1,6 +1,10 @@
 ﻿# Builds the Tauri app and generates the updater signature.
 # Run after `build-ffmpeg.ps1` (downloads FFmpeg binaries).
 
+param(
+    [string]$Version = ""
+)
+
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
@@ -37,6 +41,26 @@ if ($conf -match '"version"\s*:\s*"([^"]+)"') {
     Write-Host "! Could not read version from tauri.conf.json" -ForegroundColor Red
     exit 1
 }
+
+# If -Version was provided, bump all version files
+if ($Version) {
+    $conf = $conf -replace '"version"\s*:\s*"[^"]+"', '"version": "' + $Version + '"'
+    Set-Content -Path $confPath -Value $conf -Encoding UTF8
+
+    $cargoPath = Join-Path $root "src-tauri\Cargo.toml"
+    $cargo = Get-Content $cargoPath -Raw
+    $cargo = $cargo -replace '^version\s*=\s*"[^"]+"', 'version = "' + $Version + '"'
+    Set-Content -Path $cargoPath -Value $cargo -Encoding UTF8
+
+    $pkgPath = Join-Path $root "package.json"
+    $pkg = Get-Content $pkgPath -Raw
+    $pkg = $pkg -replace '"version"\s*:\s*"[^"]+"', '"version": "' + $Version + '"'
+    Set-Content -Path $pkgPath -Value $pkg -Encoding UTF8
+
+    $version = $Version
+    Write-Host "Bumped versions to $version" -ForegroundColor Yellow
+}
+
 Write-Host "Version: $version" -ForegroundColor Cyan
 
 $nsisExe = "$root\src-tauri\target\release\bundle\nsis\galdr_${version}_x64-setup.exe"
