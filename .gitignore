@@ -25,6 +25,8 @@ dist-ssr
 
 # Updater signing key (private)
 src-tauri/updater.key
+src-tauri/updater.key.old
+src-tauri/updater.key.pub.old
 src-tauri/.env
 
 # NSIS installer dev scratch files (test compilations in repo root)

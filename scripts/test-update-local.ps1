@@ -23,8 +23,27 @@ Write-Host "Test update version: $testVersion" -ForegroundColor Cyan
 
 $nsisZip = "$root\src-tauri\target\release\bundle\nsis\galdr_${version}_x64-setup.exe.zip"
 $nsisExe = "$root\src-tauri\target\release\bundle\nsis\galdr_${version}_x64-setup.exe"
-$keyPath = "$root\src-tauri\updater.key"
 $pubDate = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+
+# ── Load .env for key path and password ──────────────────────────────
+$envFile = Join-Path $root "src-tauri\.env"
+$keyPath = "$root\src-tauri\updater.key"
+if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match "^\s*UPDATER_PRIVATE_KEY_PATH\s*=\s*(.+)$") {
+            $keyPath = $Matches[1].Trim().Trim('"').Trim("'")
+            if (-not [System.IO.Path]::IsPathRooted($keyPath)) {
+                $keyPath = Join-Path $root $keyPath
+            }
+        }
+        if ($_ -match "^\s*UPDATER_PRIVATE_KEY_PASSWORD\s*=\s*(.+)$") {
+            $env:UPDATER_PRIVATE_KEY_PASSWORD = $Matches[1].Trim().Trim('"').Trim("'")
+        }
+    }
+    Write-Host "Using private key: $keyPath" -ForegroundColor DarkGray
+} else {
+    Write-Host ".env not found — using default key path: $keyPath" -ForegroundColor Yellow
+}
 
 # ── Build (if no existing archive) ──────────────────────────────────
 if (-not (Test-Path $nsisZip)) {
@@ -40,7 +59,7 @@ if (-not (Test-Path $nsisZip)) {
 # Create .exe.zip if only .exe exists
 if (-not (Test-Path $nsisZip) -and (Test-Path $nsisExe)) {
     Write-Host "Creating .exe.zip from existing installer..." -ForegroundColor Yellow
-    Compress-Archive -Path $nsisExe -DestinationPath $nsisZip -Force
+    python -c "import zipfile,os,sys; zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED).write(sys.argv[2],os.path.basename(sys.argv[2]))" "$nsisZip" "$nsisExe"
 }
 
 if (-not (Test-Path $nsisZip)) {
@@ -68,6 +87,29 @@ if (-not $signature) {
     exit 1
 }
 Write-Host "  Signature captured" -ForegroundColor Green
+
+# Verify signature was for the correct file
+try {
+    $sigBytes = [System.Convert]::FromBase64String($signature)
+    $sigText = [System.Text.Encoding]::UTF8.GetString($sigBytes)
+    if ($sigText -match "file:(.+)$") {
+        $signedFile = $Matches[1].Trim()
+        $expectedFile = "galdr_${version}_x64-setup.exe.zip"
+        if ($signedFile -ne $expectedFile) {
+            Write-Host "! Signature was for wrong file: '$signedFile'" -ForegroundColor Red
+            Write-Host "  Expected: '$expectedFile'" -ForegroundColor Red
+            Write-Host "  The version in tauri.conf.json may have changed after signing." -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "  Signature verified for: $signedFile" -ForegroundColor Green
+    } else {
+        Write-Host "! Could not read filename from signature trusted comment" -ForegroundColor Red
+        exit 1
+    }
+} catch {
+    Write-Host "! Failed to decode signature: $_" -ForegroundColor Red
+    exit 1
+}
 
 # ── Generate test update.json with HTTP URL ─────────────────────────
 Write-Host "[3/3] Generating test update.json..." -ForegroundColor Cyan

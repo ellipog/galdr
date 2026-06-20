@@ -11,11 +11,25 @@ set -eu
 #   2. Downloads platform-appropriate FFmpeg/FFprobe static binaries
 #   3. Builds the Tauri app
 #   4. Creates the compressed archive needed for updater signing
-#   5. Prompts for the updater signature and generates update.json
+#   5. Signs the archive and generates update.json
 # ─────────────────────────────────────────────────────────────────────────
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
+
+# ── Load .env for signing credentials ────────────────────────────────
+if [ -f src-tauri/.env ]; then
+  set +u
+  export $(grep -v '^#' src-tauri/.env | xargs)
+  set -u
+  echo "✓ Loaded .env"
+fi
+
+KEY_PATH="${UPDATER_PRIVATE_KEY_PATH:-src-tauri/updater.key}"
+if [ ! -f "$KEY_PATH" ]; then
+  echo "! Private key not found at $KEY_PATH" >&2
+  exit 1
+fi
 
 # ── Version ──────────────────────────────────────────────────────────
 CURRENT_VERSION="$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*: *"\(.*\)".*/\1/')"
@@ -156,11 +170,11 @@ case "$PLATFORM" in
     ARCHIVE="${INSTALLER}.zip"
     echo "⟳ Creating $ARCHIVE ..."
     rm -f "$ARCHIVE"
-    # Write a temp .ps1 to avoid quote escaping issues in Git Bash
-    TMPPS="$(dirname "$ARCHIVE")/_mkzip.ps1"
-    echo "Compress-Archive -Path '$INSTALLER' -DestinationPath '$ARCHIVE' -Force" > "$TMPPS"
-    powershell -ExecutionPolicy Bypass -File "$TMPPS"
-    rm -f "$TMPPS"
+    $PY -c "
+import zipfile, os, sys
+with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
+    zf.write(sys.argv[2], os.path.basename(sys.argv[2]))
+" "$ARCHIVE" "$INSTALLER"
     ;;
   linux)
     BUNDLE_DIR="src-tauri/target/release/bundle/appimage"
@@ -225,34 +239,60 @@ if [ -f "$ARCHIVE" ]; then
   echo "✓ Archive created: $(du -h "$ARCHIVE" | cut -f1)"
 else
   echo "! Archive NOT created at $ARCHIVE"
-  echo "  Creating manually with PowerShell..."
-  powershell -NoProfile -Command "& { Compress-Archive -Path '$INSTALLER' -DestinationPath '$ARCHIVE' -Force }"
+  echo "  Retrying with Python zipfile..."
+  $PY -c "
+import zipfile, os, sys
+with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as zf:
+    zf.write(sys.argv[2], os.path.basename(sys.argv[2]))
+" "$ARCHIVE" "$INSTALLER"
   if [ -f "$ARCHIVE" ]; then
-    echo "✓ Created manually."
+    echo "✓ Created successfully."
   else
     echo "! Still failed. Run this manually after the script:"
-    echo "  Compress-Archive -Path '$INSTALLER' -DestinationPath '$ARCHIVE' -Force"
+    echo "  $PY -c \"import zipfile,os,sys; zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED).write(sys.argv[2],os.path.basename(sys.argv[2]))\" \"$ARCHIVE\" \"$INSTALLER\""
   fi
 fi
 
 # ── Sign ────────────────────────────────────────────────────────────
 echo ""
-echo "⟳ Sign the archive for the updater:"
-echo "  bun run tauri signer sign --private-key-path src-tauri/updater.key \"$ARCHIVE\""
-echo ""
-echo "  Paste the signature line below (it starts with 'dW50cn...' or 'RW...')"
-read -rp "  Signature: " SIGNATURE
+echo "⟳ Signing archive..."
+SIGNATURE=""
+if command -v bun &>/dev/null; then
+  SIGNATURE="$(bun x tauri signer sign --private-key-path "$KEY_PATH" "$ARCHIVE" 2>&1 || true)"
+fi
+if [ -z "$SIGNATURE" ] || ! echo "$SIGNATURE" | grep -qE '^(dW50cn|RW)'; then
+  SIGNATURE="$(bun run tauri signer sign --private-key-path "$KEY_PATH" "$ARCHIVE" 2>&1 || true)"
+fi
+
+# Extract just the signature line (starts with dW50cn... or RW...)
+SIGNATURE="$(echo "$SIGNATURE" | tr -d '\r' | grep -E '^(dW50cn|RW)' | head -1 | xargs)"
 
 if [ -z "$SIGNATURE" ]; then
-  SIGNATURE="PASTE_SIGNATURE_HERE"
+  echo "! Failed to extract signature from output:" >&2
+  echo "$SIGNATURE" >&2
+  exit 1
 fi
+echo "✓ Signature captured"
+
+# Verify signature was for the correct file
+ARCHIVE_NAME="$(basename "$ARCHIVE")"
+SIG_DECODED="$(python3 -c "import base64,sys; print(base64.b64decode(sys.argv[1]).decode())" "$SIGNATURE" 2>/dev/null || \
+               python -c "import base64,sys; print(base64.b64decode(sys.argv[1]).decode())" "$SIGNATURE" 2>/dev/null || true)"
+SIGNED_FILE="$(echo "$SIG_DECODED" | sed -n 's/.*file:\(.*\)/\1/p')"
+if [ -z "$SIGNED_FILE" ]; then
+  echo "! Could not read filename from signature trusted comment" >&2
+  exit 1
+fi
+if [ "$SIGNED_FILE" != "$ARCHIVE_NAME" ]; then
+  echo "! Signature was for wrong file: '$SIGNED_FILE'" >&2
+  echo "  Expected: '$ARCHIVE_NAME'" >&2
+  echo "  The version in tauri.conf.json may have changed after signing." >&2
+  exit 1
+fi
+echo "✓ Signature verified for: $SIGNED_FILE"
 
 # ── Generate update.json ───────────────────────────────────────────
 PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-ARCHIVE_NAME="$(basename "$ARCHIVE")"
-
-# Strip leading/trailing whitespace from signature
-SIGNATURE="$(echo "$SIGNATURE" | xargs)"
 
 cat > update.json <<JSON
 {

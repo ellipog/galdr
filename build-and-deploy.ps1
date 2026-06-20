@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
-# ── Load .env for key path ──────────────────────────────────────────
+# ── Load .env for key path and password ─────────────────────────────
 $envFile = Join-Path $root "src-tauri\.env"
 $keyPath = "$root\src-tauri\updater.key"
 if (Test-Path $envFile) {
@@ -14,6 +14,9 @@ if (Test-Path $envFile) {
             if (-not [System.IO.Path]::IsPathRooted($keyPath)) {
                 $keyPath = Join-Path $root $keyPath
             }
+        }
+        if ($_ -match "^\s*UPDATER_PRIVATE_KEY_PASSWORD\s*=\s*(.+)$") {
+            $env:UPDATER_PRIVATE_KEY_PASSWORD = $Matches[1].Trim().Trim('"').Trim("'")
         }
     }
     Write-Host "Using private key: $keyPath" -ForegroundColor DarkGray
@@ -62,7 +65,7 @@ if (-not (Test-Path $nsisZip)) {
         exit 1
     }
     Write-Host "Creating .exe.zip..."
-    Compress-Archive -Path $nsisExe -DestinationPath $nsisZip -Force
+    python -c "import zipfile,os,sys; zipfile.ZipFile(sys.argv[1],'w',zipfile.ZIP_DEFLATED).write(sys.argv[2],os.path.basename(sys.argv[2]))" "$nsisZip" "$nsisExe"
 }
 $zipSize = (Get-Item $nsisZip).Length / 1MB
 Write-Host "Archive: $nsisZip ($([math]::Round($zipSize, 1)) MB)"
@@ -89,6 +92,29 @@ if (-not $signature) {
 }
 Write-Host "Signature captured" -ForegroundColor Green
 
+# Verify signature was for the correct file
+try {
+    $sigBytes = [System.Convert]::FromBase64String($signature)
+    $sigText = [System.Text.Encoding]::UTF8.GetString($sigBytes)
+    if ($sigText -match "file:(.+)$") {
+        $signedFile = $Matches[1].Trim()
+        $expectedFile = "galdr_${version}_x64-setup.exe.zip"
+        if ($signedFile -ne $expectedFile) {
+            Write-Host "! Signature was for wrong file: '$signedFile'" -ForegroundColor Red
+            Write-Host "  Expected: '$expectedFile'" -ForegroundColor Red
+            Write-Host "  The version in tauri.conf.json may have changed after signing." -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "  Signature verified for: $signedFile" -ForegroundColor Green
+    } else {
+        Write-Host "! Could not read filename from signature trusted comment" -ForegroundColor Red
+        exit 1
+    }
+} catch {
+    Write-Host "! Failed to decode signature: $_" -ForegroundColor Red
+    exit 1
+}
+
 # ── 4. Generate update.json ────────────────────────────────────────
 Write-Host "`n[4/4] Generating update.json..." -ForegroundColor Cyan
 $updateJson = @"
@@ -114,10 +140,9 @@ Write-Host "---" -ForegroundColor DarkGray
 # Verify archive is a valid zip
 Write-Host "`nVerifying archive..." -ForegroundColor Cyan
 try {
-    $zip = [System.IO.Compression.ZipFile]::OpenRead($nsisZip)
-    $entryCount = $zip.Entries.Count
-    $zip.Dispose()
-    Write-Host "  Archive is valid zip ($entryCount entries)" -ForegroundColor Green
+    $zipCheck = python -c "import zipfile,sys; zf=zipfile.ZipFile(sys.argv[1]); print(len(zf.namelist())); zf.close()" "$nsisZip" 2>&1
+    if ($LASTEXITCODE -ne 0) { throw $zipCheck }
+    Write-Host "  Archive is valid zip ($zipCheck entries)" -ForegroundColor Green
 } catch {
     Write-Host "  ! Archive is not a valid zip: $_" -ForegroundColor Red
     exit 1

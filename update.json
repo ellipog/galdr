@@ -1,11 +1,11 @@
 {
-  "version": "0.2.1",
-  "notes": "See https://github.com/ellipog/galdr/releases/tag/v0.2.1",
-  "pub_date": "2026-06-19T18:25:58Z",
+  "version": "0.2.4",
+  "notes": "See https://github.com/ellipog/galdr/releases/tag/v0.2.4",
+  "pub_date": "2026-06-20T09:17:22Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRWExPR1dkQTdGNFJNRjNPbXZMaGkzaHhxR0NVdEVvb2tGQ0xFUVdtSkFPV0N6M0k1Sy9wUWxjTjZYQVlhYk1xOUtiUkt0eXArcXhSQzVpdU5XY241NytPMzh2bHhSOGd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxODkzMTE2CWZpbGU6Z2FsZHJfMC4wLjFfeDY0LXNldHVwLmV4ZS56aXAKMWtWVWxqV0laK3NmRHJYdkduR0w2N00rMXcyNyt1U3VRbS9KWHl6T2NDUlRUYjdVNmtaaVZlbys0SkRsOGVhaVNGUU16a3NIREtoR0R5ZitwZUJoQWc9PQo=",
-      "url": "https://github.com/ellipog/galdr/releases/download/v0.2.1/galdr_0.2.1_x64-setup.exe.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSM1Jpa0dJdHZDVkV6QytVNWQ5Y296YXRka0EzQnFxdWhMTmdsVTdVeWIwV0k2RThnQVdTVjdVUDRyZnJHaFlMMUEwUDlnQU9nWmNhRVJ6U0ZaV1RLWThjdExFRUNjR3dBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxOTQ3MDQxCWZpbGU6Z2FsZHJfMC4yLjRfeDY0LXNldHVwLmV4ZS56aXAKSzd3QzV5bTZCajBlVnZjaTEyRzEyN2puQUVQMXNPMU9kdXAyb1ZNWjRoNGY0TWJCbGRMRzBzZ0RxUUwvLzUzeHAzS2kvT1NpSTcyaEJqNTBzYmF3Q0E9PQo=",
+      "url": "https://github.com/ellipog/galdr/releases/download/v0.2.4/galdr_0.2.4_x64-setup.exe.zip"
     }
   }
 }
