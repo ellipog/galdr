@@ -167,20 +167,6 @@ export default function ForgePage() {
     return () => { unlistenDrop?.(); };
   }, [addToLibrary, loadProjectFromPath]);
 
-  // Listen for .galdr files opened via OS file association
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    (async () => {
-      unlisten = await listen<string>("tauri://open-file", (event) => {
-        const path = event.payload;
-        if (path.toLowerCase().endsWith(".galdr")) {
-          loadProjectFromPath(path);
-        }
-      });
-    })();
-    return () => { unlisten?.(); };
-  }, [loadProjectFromPath]);
-
   // Update window title with project name
   useEffect(() => {
     const name = currentFilePath

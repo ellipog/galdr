@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::watch_folder::WatchFolderConfig;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -8,6 +10,12 @@ pub struct AppSettings {
     pub crt_enabled: bool,
     pub show_rune_in_titlebar: bool,
     pub discord_enabled: bool,
+    /// Watch-folder configs. Each entry is monitored by the watcher daemon.
+    #[serde(default)]
+    pub watch_folders: Vec<WatchFolderConfig>,
+    /// Fire an OS toast when a watched-file conversion finishes.
+    #[serde(default)]
+    pub notify_on_watch_complete: bool,
 }
 
 impl Default for AppSettings {
@@ -18,6 +26,8 @@ impl Default for AppSettings {
             crt_enabled: false,
             show_rune_in_titlebar: true,
             discord_enabled: true,
+            watch_folders: Vec::new(),
+            notify_on_watch_complete: true,
         }
     }
 }

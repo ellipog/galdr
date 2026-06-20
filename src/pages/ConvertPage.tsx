@@ -7,6 +7,8 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useGaldrStore } from "../store";
 import Dropdown from "../components/Dropdown";
 import ScrambleText from "../components/ScrambleText";
+import ConvertOperations from "../components/ConvertOperations";
+import ExtractFramesPanel from "../components/ExtractFramesPanel";
 import { FORMAT_OPTIONS } from "../options";
 import type { FormatOption } from "../options";
 import CommandPreview from "../components/CommandPreview";
@@ -349,6 +351,14 @@ export default function ConvertPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {mediaType && mediaInfo && (
+        <ConvertOperations mediaType={mediaType} mediaInfo={mediaInfo} />
+      )}
+
+      {mediaType === "video" && mediaInfo && conversionParams.input_path && (
+        <ExtractFramesPanel inputPath={conversionParams.input_path} mediaInfo={mediaInfo} />
+      )}
 
       <ScrambleText as="div" className="rune-divider" text="ᛟ ᛟ ᛟ ᛟ ᛟ" hover ticks={4} />
 

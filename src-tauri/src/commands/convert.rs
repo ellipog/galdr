@@ -43,6 +43,18 @@ pub async fn start_conversion(
     app_handle: tauri::AppHandle,
     params: ConversionParams,
 ) -> Result<ConversionDonePayload, String> {
+    run_single_conversion(&app_handle, params, "default")
+}
+
+/// Shared conversion core. Runs one file through the ffmpeg pipeline and
+/// emits `conversion-progress` / `conversion-log` events tagged with the
+/// given `job_id`. Used by the manual Convert command (`job_id = "default"`)
+/// and by the watch-folder auto-converter (`job_id = "watch:<folderId>"`).
+pub fn run_single_conversion<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    params: ConversionParams,
+    job_id: &str,
+) -> Result<ConversionDonePayload, String> {
     std::fs::create_dir_all(&params.output_dir)
         .map_err(|e| format!("Failed to create output dir: {}", e))?;
 
@@ -72,7 +84,7 @@ pub async fn start_conversion(
                 let _ = app_handle.emit(
                     "conversion-progress",
                     ConversionProgressPayload {
-                        job_id: "default".to_string(),
+                        job_id: job_id.to_string(),
                         progress: *p,
                     },
                 );
@@ -89,7 +101,7 @@ pub async fn start_conversion(
                 discord_rpc::track_conversion();
                 discord_rpc::set_idle();
                 return Ok(ConversionDonePayload {
-                    job_id: "default".to_string(),
+                    job_id: job_id.to_string(),
                     output_path: path.clone(),
                 });
             }
@@ -107,6 +119,201 @@ pub async fn start_conversion(
 #[tauri::command]
 pub async fn detect_ffmpeg() -> bool {
     crate::ffmpeg::runner::detect_ffmpeg()
+}
+
+/// Concatenate multiple video clips into one. Uses the concat demuxer with
+/// stream copy (-c copy) for a fast, re-encode-free join. All inputs must
+/// share the same codecs/parameters; mismatches are surfaced as an error.
+#[tauri::command]
+pub async fn concat_videos(
+    app_handle: tauri::AppHandle,
+    inputs: Vec<String>,
+    output_path: String,
+    with_audio: bool,
+) -> Result<ConversionDonePayload, String> {
+    if inputs.len() < 2 {
+        return Err("Need at least two clips to concatenate".to_string());
+    }
+
+    std::fs::create_dir_all(
+        std::path::Path::new(&output_path).parent().unwrap_or(std::path::Path::new(".")),
+    )
+    .map_err(|e| format!("Failed to create output dir: {}", e))?;
+
+    // Build the concat demuxer list file. Entries are single-quoted; any
+    // embedded single quotes in the path are escaped per ffmpeg's convention.
+    let list_path = std::env::temp_dir().join(format!("galdr_concat_{}.txt", uuid()));
+    let mut list = String::new();
+    for input in &inputs {
+        let escaped = input.replace('\'', "'\\''");
+        list.push_str(&format!("file '{}'\n", escaped));
+    }
+    std::fs::write(&list_path, &list)
+        .map_err(|e| format!("Failed to write concat list: {}", e))?;
+
+    // Total duration drives progress reporting.
+    let total_duration: f64 = inputs
+        .iter()
+        .map(|p| probe_file(std::path::Path::new(p)).map(|i| i.duration).unwrap_or(0.0))
+        .sum();
+
+    let file_name = std::path::Path::new(&inputs[0])
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("concat")
+        .to_string();
+    discord_rpc::set_converting(&file_name, 0.0, "concat", None);
+
+    let mut args: Vec<String> = vec![
+        "-f".into(),
+        "concat".into(),
+        "-safe".into(),
+        "0".into(),
+        "-i".into(),
+        list_path.to_string_lossy().to_string(),
+        "-c".into(),
+        "copy".into(),
+    ];
+    if !with_audio {
+        args.push("-an".into());
+    }
+    args.push(output_path.clone());
+
+    let events = run_conversion(&args, total_duration);
+    let _ = std::fs::remove_file(&list_path);
+    let events = events?;
+
+    for event in &events {
+        match event {
+            crate::ffmpeg::FfmpegEvent::Progress(p) => {
+                discord_rpc::set_converting(&file_name, *p, "concat", None);
+                let _ = app_handle.emit(
+                    "conversion-progress",
+                    ConversionProgressPayload {
+                        job_id: "concat".to_string(),
+                        progress: *p,
+                    },
+                );
+            }
+            crate::ffmpeg::FfmpegEvent::Log(msg) => {
+                let _ = app_handle.emit(
+                    "conversion-log",
+                    ConversionLogPayload { message: msg.clone() },
+                );
+            }
+            crate::ffmpeg::FfmpegEvent::Done(path) => {
+                discord_rpc::track_conversion();
+                discord_rpc::set_idle();
+                return Ok(ConversionDonePayload {
+                    job_id: "concat".to_string(),
+                    output_path: path.clone(),
+                });
+            }
+            crate::ffmpeg::FfmpegEvent::Error(msg) => {
+                discord_rpc::set_idle();
+                return Err(msg.clone());
+            }
+        }
+    }
+
+    discord_rpc::set_idle();
+    Err("Concatenation produced no output".to_string())
+}
+
+/// Extract the audio track from a media file into a standalone audio file.
+#[tauri::command]
+pub async fn extract_audio(
+    app_handle: tauri::AppHandle,
+    input_path: String,
+    output_path: String,
+    audio_format: String,
+    bitrate: Option<String>,
+) -> Result<ConversionDonePayload, String> {
+    std::fs::create_dir_all(
+        std::path::Path::new(&output_path).parent().unwrap_or(std::path::Path::new(".")),
+    )
+    .map_err(|e| format!("Failed to create output dir: {}", e))?;
+
+    let duration = probe_file(std::path::Path::new(&input_path))
+        .map(|info| info.duration)
+        .unwrap_or(0.0);
+
+    let file_name = std::path::Path::new(&input_path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    discord_rpc::set_converting(&file_name, 0.0, &audio_format, None);
+
+    // Pick the codec for the requested container.
+    let codec = match audio_format.to_lowercase().as_str() {
+        "mp3" => "libmp3lame",
+        "aac" | "m4a" => "aac",
+        "ogg" => "libvorbis",
+        "opus" => "libopus",
+        "flac" => "flac",
+        "wav" => "pcm_s16le",
+        _ => "libmp3lame",
+    };
+
+    let mut args: Vec<String> = vec![
+        "-vn".into(),
+        "-c:a".into(),
+        codec.into(),
+    ];
+    if let Some(br) = &bitrate {
+        args.push("-b:a".into());
+        args.push(br.clone());
+    }
+    args.push(output_path.clone());
+
+    let events = run_conversion(&args, duration)?;
+
+    for event in &events {
+        match event {
+            crate::ffmpeg::FfmpegEvent::Progress(p) => {
+                discord_rpc::set_converting(&file_name, *p, &audio_format, None);
+                let _ = app_handle.emit(
+                    "conversion-progress",
+                    ConversionProgressPayload {
+                        job_id: "extract-audio".to_string(),
+                        progress: *p,
+                    },
+                );
+            }
+            crate::ffmpeg::FfmpegEvent::Log(msg) => {
+                let _ = app_handle.emit(
+                    "conversion-log",
+                    ConversionLogPayload { message: msg.clone() },
+                );
+            }
+            crate::ffmpeg::FfmpegEvent::Done(path) => {
+                discord_rpc::track_conversion();
+                discord_rpc::set_idle();
+                return Ok(ConversionDonePayload {
+                    job_id: "extract-audio".to_string(),
+                    output_path: path.clone(),
+                });
+            }
+            crate::ffmpeg::FfmpegEvent::Error(msg) => {
+                discord_rpc::set_idle();
+                return Err(msg.clone());
+            }
+        }
+    }
+
+    discord_rpc::set_idle();
+    Err("Audio extraction produced no output".to_string())
+}
+
+/// Cheap unique suffix for the temp concat list filename.
+fn uuid() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    format!("{:x}", nanos)
 }
 
 #[tauri::command]
@@ -244,27 +451,7 @@ pub async fn start_batch_conversion(
             input_path: input_path.clone(),
             output_dir: params.output_dir.clone(),
             output_format: params.output_format.clone(),
-            video_codec: None,
-            audio_codec: None,
-            video_bitrate: None,
-            audio_bitrate: None,
-            resolution: None,
-            framerate: None,
-            crf: None,
-            preset: None,
-            quality: None,
-            trim_start: None,
-            trim_end: None,
-            crop_w: None,
-            crop_h: None,
-            crop_x: None,
-            crop_y: None,
-            crop_ratio: None,
-            speed_video: None,
-            speed_audio: None,
-            rotate: None,
-            sample_rate: None,
-            channels: None,
+            ..Default::default()
         };
 
         let args = build_args(&single_params);

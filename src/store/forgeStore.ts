@@ -147,7 +147,7 @@ interface ForgeState {
   importMediaFiles: () => Promise<void>;
   saveProject: () => Promise<void>;
   loadProject: () => Promise<void>;
-  loadProjectFromPath: (path: string) => Promise<void>;
+  loadProjectFromPath: (path: string, opts?: { fromExternal?: boolean }) => Promise<void>;
   addRecentFile: (path: string) => void;
   loadRecentFiles: () => void;
   restoreFromRecovery: (project: ForgeProjectData, mediaLibrary: MediaLibraryItem[], filePath: string | null) => void;
@@ -515,13 +515,16 @@ export const useForgeStore = create<ForgeState>((set, get) => ({
     } catch {}
   },
 
-  loadProjectFromPath: async (path: string) => {
+  loadProjectFromPath: async (path: string, opts?: { fromExternal?: boolean }) => {
+    const fromExternal = opts?.fromExternal ?? false;
     if (get().isModified) {
       if (await get().showConfirmDialog("Save changes before opening another project?", "Unsaved Changes")) {
         await get().saveProject();
         if (get().isModified) return;
       }
-    } else {
+    } else if (!fromExternal) {
+      // Skip the confirm for an external double-click launch (nothing to lose),
+      // but still ask when opening from within the app.
       if (!await get().showConfirmDialog("Open this project? Current work on this project will be discarded.", "Open Project")) return;
     }
     try {

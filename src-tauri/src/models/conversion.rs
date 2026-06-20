@@ -25,8 +25,18 @@ pub struct ConversionParams {
     pub speed_video: Option<f64>,
     pub speed_audio: Option<f64>,
     pub rotate: Option<u32>,
+    pub flip: Option<String>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
+    /// Audio normalization: "loudnorm" (EBU R128) | "dynaudnorm" (peak)
+    #[serde(default)]
+    pub audio_normalize: Option<String>,
+    /// Audio fade-in duration (seconds)
+    #[serde(default)]
+    pub fade_in: Option<f64>,
+    /// Audio fade-out duration (seconds)
+    #[serde(default)]
+    pub fade_out: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,8 +81,20 @@ impl Default for ConversionParams {
             speed_video: None,
             speed_audio: None,
             rotate: None,
+            flip: None,
             sample_rate: None,
             channels: None,
+            audio_normalize: None,
+            fade_in: None,
+            fade_out: None,
         }
+    }
+}
+
+impl ConversionParams {
+    /// Convenience for serde `default =` attributes on structs that embed
+    /// a conversion preset (e.g. watch folders).
+    pub fn default_value() -> Self {
+        Self::default()
     }
 }

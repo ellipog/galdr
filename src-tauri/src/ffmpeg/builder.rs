@@ -98,6 +98,15 @@ pub fn build_args(params: &ConversionParams) -> Vec<String> {
         }
     }
 
+    // Flip (horizontal/vertical)
+    if let Some(flip) = &params.flip {
+        match flip.as_str() {
+            "h" => filter_parts.push("hflip".to_string()),
+            "v" => filter_parts.push("vflip".to_string()),
+            _ => {}
+        }
+    }
+
     // Video speed (setpts)
     if let Some(spd) = params.speed_video {
         if (spd - 1.0).abs() > f64::EPSILON && spd > 0.0 {
@@ -327,10 +336,13 @@ pub fn build_args(params: &ConversionParams) -> Vec<String> {
         args.push(filter_parts.join(","));
     }
 
+    // Audio filter chain: speed (atempo) + normalization + fades.
+    // All audio filters are joined into a single -af argument.
+    let mut af_parts: Vec<String> = Vec::new();
+
     // Audio speed (atempo chaining for values outside 0.5–2.0 range)
     if let Some(spd) = params.speed_audio {
         if (spd - 1.0).abs() > f64::EPSILON && spd > 0.0 {
-            let mut af_parts: Vec<String> = Vec::new();
             let mut remaining = spd;
             while remaining < 0.5 {
                 af_parts.push("atempo=0.5".to_string());
@@ -343,11 +355,49 @@ pub fn build_args(params: &ConversionParams) -> Vec<String> {
             if (remaining - 1.0).abs() > f64::EPSILON {
                 af_parts.push(format!("atempo={}", remaining));
             }
-            if !af_parts.is_empty() {
-                args.push("-af".to_string());
-                args.push(af_parts.join(","));
-            }
         }
+    }
+
+    // Audio normalization (EBU R128 loudnorm or peak dynaudnorm)
+    if let Some(norm) = &params.audio_normalize {
+        match norm.as_str() {
+            "loudnorm" => af_parts.push(
+                "loudnorm=I=-16:TP=-1.5:LRA=11".to_string(),
+            ),
+            "dynaudnorm" => af_parts.push("dynaudnorm".to_string()),
+            _ => {}
+        }
+    }
+
+    // Audio fades. Fade-in starts at t=0; fade-out starts at
+    // (effective duration - fade_out). Effective duration accounts for
+    // trim and speed so the out-fade lands at the real end of the audio.
+    let src_duration = crate::ffmpeg::probe_duration(&params.input_path);
+    let trim_end = params.trim_end.filter(|&e| e > 0.0).unwrap_or(src_duration);
+    let trim_start = params.trim_start.unwrap_or(0.0);
+    let span = (trim_end - trim_start).max(0.0);
+    let audio_speed = params.speed_audio.unwrap_or(1.0).max(0.01);
+    let eff_duration = if (audio_speed - 1.0).abs() > f64::EPSILON {
+        span / audio_speed
+    } else {
+        span
+    };
+
+    if let Some(d) = params.fade_in {
+        if d > 0.0 {
+            af_parts.push(format!("afade=t=in:st=0:d={}", d));
+        }
+    }
+    if let Some(d) = params.fade_out {
+        if d > 0.0 && eff_duration > d {
+            let start = eff_duration - d;
+            af_parts.push(format!("afade=t=out:st={}:d={}", start, d));
+        }
+    }
+
+    if !af_parts.is_empty() {
+        args.push("-af".to_string());
+        args.push(af_parts.join(","));
     }
 
     // Sample rate and channels
@@ -550,5 +600,57 @@ mod tests {
         let args = build_args(&params);
         let br = flag_value(&args, "-b:a").unwrap();
         assert_eq!(br, "64k", "explicit audio bitrate should override quality-derived");
+    }
+
+    #[test]
+    fn test_flip_horizontal() {
+        let mut params = make_params("mp4", Some(0.5));
+        params.flip = Some("h".to_string());
+        let args = build_args(&params);
+        let vf = flag_value(&args, "-vf").unwrap();
+        assert!(vf.contains("hflip"), "horizontal flip should emit hflip");
+    }
+
+    #[test]
+    fn test_flip_vertical() {
+        let mut params = make_params("mp4", Some(0.5));
+        params.flip = Some("v".to_string());
+        let args = build_args(&params);
+        let vf = flag_value(&args, "-vf").unwrap();
+        assert!(vf.contains("vflip"), "vertical flip should emit vflip");
+    }
+
+    #[test]
+    fn test_audio_normalize_loudnorm() {
+        let mut params = make_params("mp3", Some(0.5));
+        params.audio_normalize = Some("loudnorm".to_string());
+        let args = build_args(&params);
+        let af = flag_value(&args, "-af").unwrap();
+        assert!(af.contains("loudnorm=I=-16"), "loudnorm should be in audio filter chain");
+    }
+
+    #[test]
+    fn test_audio_normalize_dynaudnorm() {
+        let mut params = make_params("mp3", Some(0.5));
+        params.audio_normalize = Some("dynaudnorm".to_string());
+        let args = build_args(&params);
+        let af = flag_value(&args, "-af").unwrap();
+        assert!(af.contains("dynaudnorm"), "dynaudnorm should be in audio filter chain");
+    }
+
+    #[test]
+    fn test_no_audio_filter_when_unset() {
+        let params = make_params("mp3", Some(0.5));
+        let args = build_args(&params);
+        assert!(!has_flag(&args, "-af"), "no -af should be emitted when no audio filters are set");
+    }
+
+    #[test]
+    fn test_fade_in_audio_filter() {
+        let mut params = make_params("mp3", Some(0.5));
+        params.fade_in = Some(2.0);
+        let args = build_args(&params);
+        let af = flag_value(&args, "-af").unwrap();
+        assert!(af.contains("afade=t=in:st=0:d=2"), "fade-in should emit afade=t=in:st=0:d=2");
     }
 }

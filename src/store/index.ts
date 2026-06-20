@@ -32,6 +32,7 @@ interface GaldrState {
   runeTags: RuneTag[];
   showRuneInTitlebar: boolean;
   discordEnabled: boolean;
+  autostartEnabled: boolean;
 
   setMediaInfo: (info: MediaInfo | null) => void;
   setConversionParams: (params: Partial<ConversionParams>) => void;
@@ -59,6 +60,7 @@ interface GaldrState {
   setRuneTags: (tags: RuneTag[]) => void;
   setShowRuneInTitlebar: (v: boolean) => void;
   setDiscordEnabled: (v: boolean) => void;
+  setAutostartEnabled: (v: boolean) => void;
 }
 
 const defaultParams: ConversionParams = {
@@ -84,8 +86,12 @@ const defaultParams: ConversionParams = {
   speed_video: undefined,
   speed_audio: undefined,
   rotate: undefined,
+  flip: undefined,
   sample_rate: undefined,
   channels: undefined,
+  audio_normalize: undefined,
+  fade_in: undefined,
+  fade_out: undefined,
 };
 
 export const useGaldrStore = create<GaldrState>((set) => ({
@@ -114,6 +120,7 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   runeTags: [],
   showRuneInTitlebar: true,
   discordEnabled: true,
+  autostartEnabled: false,
 
   setMediaInfo: (info) => set({ mediaInfo: info }),
   setConversionParams: (params) =>
@@ -151,4 +158,5 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   setRuneTags: (tags) => set({ runeTags: tags }),
   setShowRuneInTitlebar: (v) => set({ showRuneInTitlebar: v }),
   setDiscordEnabled: (v) => set({ discordEnabled: v }),
+  setAutostartEnabled: (v) => set({ autostartEnabled: v }),
 }));

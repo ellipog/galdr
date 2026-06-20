@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
+import { enable, disable } from "@tauri-apps/plugin-autostart";
 import { useGaldrStore } from "../store";
 import Dropdown from "../components/Dropdown";
 import { TRANSITION_OPTIONS } from "../transitions";
@@ -10,7 +11,7 @@ import { useContextMenu } from "../components/ContextMenu";
 const SUBFOLDERS = ["video", "audio", "image"];
 
 interface Props {
-  onNavigate: (page: "batch") => void;
+  onNavigate: (page: "batch" | "watch") => void;
 }
 
 export default function SettingsPage({ onNavigate }: Props) {
@@ -21,6 +22,7 @@ export default function SettingsPage({ onNavigate }: Props) {
     setUpdateDismissed,
     showRuneInTitlebar, setShowRuneInTitlebar,
     discordEnabled, setDiscordEnabled,
+    autostartEnabled, setAutostartEnabled,
   } = useGaldrStore();
   const [version, setVersion] = useState("");
   const { show } = useContextMenu();
@@ -34,6 +36,13 @@ export default function SettingsPage({ onNavigate }: Props) {
     setDiscordEnabled(next);
     invoke("set_discord_enabled", { enabled: next }).catch(() => {});
   }, [discordEnabled, setDiscordEnabled]);
+
+  const toggleAutostart = useCallback(() => {
+    const next = !autostartEnabled;
+    setAutostartEnabled(next);
+    if (next) enable().catch(() => setAutostartEnabled(false));
+    else disable().catch(() => setAutostartEnabled(true));
+  }, [autostartEnabled, setAutostartEnabled]);
 
   const pickFolder = async () => {
     const sel = await open({ directory: true, multiple: false });
@@ -128,6 +137,26 @@ export default function SettingsPage({ onNavigate }: Props) {
           </span>{" "}
           to use it.
         </p>
+      </div>
+
+      <div className="card">
+        <label className="label">background &amp; watch folders</label>
+        <p className="settings-hint" style={{ margin: 0 }}>
+          watch folders convert incoming files automatically, even when the window is
+          closed to the tray. configure them in{" "}
+          <span className="nav-path-link" onClick={() => onNavigate("watch")}>
+            ~/galdr/watch
+          </span>.
+        </p>
+        <div className="row" style={{ marginTop: 12 }}>
+          <label className="toggle-label" style={{ flex: 1 }}>launch at login</label>
+          <button
+            className={`btn toggle-btn${autostartEnabled ? " active" : ""}`}
+            onClick={toggleAutostart}
+          >
+            {autostartEnabled ? "on" : "off"}
+          </button>
+        </div>
       </div>
 
       <div className="card" onContextMenu={handleUpdateContext}>

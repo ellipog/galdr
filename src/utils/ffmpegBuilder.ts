@@ -93,6 +93,10 @@ export function buildFFmpegCommand(params: ConversionParams): string {
     else if (params.rotate === 270) filterParts.push("transpose=2");
   }
 
+  // Flip (horizontal/vertical)
+  if (params.flip === "h") filterParts.push("hflip");
+  else if (params.flip === "v") filterParts.push("vflip");
+
   // Video speed
   if (params.speed_video !== undefined && params.speed_video !== null && params.speed_video > 0 && Math.abs(params.speed_video - 1) > 1e-9) {
     filterParts.push(`setpts=${1 / params.speed_video}*PTS`);
@@ -284,9 +288,13 @@ export function buildFFmpegCommand(params: ConversionParams): string {
     parts.push("-vf", filterParts.join(","));
   }
 
-  // Audio speed (atempo chaining)
+  // Audio filter chain: speed (atempo) + normalization + fades, joined
+  // into a single -af. Note: the real builder (Rust) computes the fade-out
+  // start from the probed duration; this client-side preview omits the
+  // exact start time since it can't probe here.
+  const afParts: string[] = [];
+
   if (params.speed_audio !== undefined && params.speed_audio !== null && params.speed_audio > 0 && Math.abs(params.speed_audio - 1) > 1e-9) {
-    const afParts: string[] = [];
     let remaining = params.speed_audio;
     while (remaining < 0.5) {
       afParts.push("atempo=0.5");
@@ -299,9 +307,23 @@ export function buildFFmpegCommand(params: ConversionParams): string {
     if (Math.abs(remaining - 1) > 1e-9) {
       afParts.push(`atempo=${remaining}`);
     }
-    if (afParts.length > 0) {
-      parts.push("-af", afParts.join(","));
-    }
+  }
+
+  if (params.audio_normalize === "loudnorm") {
+    afParts.push("loudnorm=I=-16:TP=-1.5:LRA=11");
+  } else if (params.audio_normalize === "dynaudnorm") {
+    afParts.push("dynaudnorm");
+  }
+
+  if (params.fade_in !== undefined && params.fade_in > 0) {
+    afParts.push(`afade=t=in:st=0:d=${params.fade_in}`);
+  }
+  if (params.fade_out !== undefined && params.fade_out > 0) {
+    afParts.push(`afade=t=out:d=${params.fade_out}`);
+  }
+
+  if (afParts.length > 0) {
+    parts.push("-af", afParts.join(","));
   }
 
   // Sample rate and channels

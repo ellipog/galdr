@@ -21,8 +21,15 @@ export interface ConversionParams {
   speed_video?: number;
   speed_audio?: number;
   rotate?: number;
+  flip?: "h" | "v";
   sample_rate?: number;
   channels?: number;
+  /** Audio normalization: "loudnorm" (EBU R128) | "dynaudnorm" (peak) */
+  audio_normalize?: "loudnorm" | "dynaudnorm";
+  /** Audio fade-in duration (seconds) */
+  fade_in?: number;
+  /** Audio fade-out duration (seconds) */
+  fade_out?: number;
 }
 
 export interface PresetParams {
@@ -163,3 +170,41 @@ export interface RecentFileEntry {
   name: string;
   updated: string;
 }
+
+// ── Watch Folder Types ──
+
+export type WatchAction = "autoConvert" | "queue";
+
+export interface WatchFolderConfig {
+  id: string;
+  enabled: boolean;
+  path: string;
+  /** Lowercase extensions without dot, e.g. ["mp4","mov"]. Empty = all. */
+  extensions: string[];
+  outputDir: string;
+  action: WatchAction;
+  /** Conversion preset applied on auto-convert (inputPath/outputDir overwritten). */
+  params: Partial<ConversionParams>;
+  deleteSource: boolean;
+}
+
+/** A file waiting in the manual-review queue (Queue-action folders). */
+export interface QueuedFile {
+  id: string;
+  folderId: string;
+  folderPath: string;
+  path: string;
+  name: string;
+  queuedAt: string;
+}
+
+/** Live activity for a watched-file conversion. */
+export interface WatchActivity {
+  folderId: string;
+  path: string;
+  progress: number;
+  status: "running" | "done" | "error";
+  outputPath?: string;
+  error?: string;
+}
+

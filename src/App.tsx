@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, ProgressBarStatus, UserAttentionType } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
+import { isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import HomePage from "./pages/HomePage";
 import ConvertPage from "./pages/ConvertPage";
 import BatchConvertPage from "./pages/BatchConvertPage";
@@ -9,12 +11,14 @@ import CompressPage from "./pages/CompressPage";
 import SettingsPage from "./pages/SettingsPage";
 import RunesPage from "./pages/RunesPage";
 import ForgePage from "./pages/ForgePage";
+import WatchFoldersPage from "./pages/WatchFoldersPage";
 import ScrambleText from "./components/ScrambleText";
 import UpdateBanner from "./components/UpdateBanner";
 import PageTransition from "./transitions";
 import { useGaldrStore } from "./store";
 import { useForgeStore } from "./store/forgeStore";
 import { ContextMenuProvider, useContextMenu } from "./components/ContextMenu";
+import type { GaldrProjectFile } from "./types";
 import "./App.css";
 
 interface AppSettings {
@@ -29,7 +33,7 @@ const PERSIST_FIELDS: (keyof AppSettings)[] = [
   "outputDir", "transitionStyle", "crtEnabled", "showRuneInTitlebar", "discordEnabled",
 ];
 
-type Page = "home" | "convert" | "batch" | "compress" | "settings" | "runes" | "forge";
+type Page = "home" | "convert" | "batch" | "compress" | "settings" | "runes" | "forge" | "watch";
 
 function AppShell() {
   const [page, setPage] = useState<Page>("home");
@@ -49,6 +53,41 @@ function AppShell() {
     getVersion().then(setAppVersion).catch(() => setAppVersion("0.1.0"));
   }, []);
 
+  // Routes an externally-opened .galdr file: inspect its content and open the
+  // right page. Currently forge is the only app, but the discriminator leaves
+  // room for more.
+  const handleOpenFile = useCallback(async (path: string) => {
+    try {
+      const raw = await invoke<string>("load_project_file", { path });
+      const file = JSON.parse(raw) as GaldrProjectFile;
+      if (file.type !== "galdr-project") return;
+      if (file.app === "forge") {
+        setPage("forge");
+        await useForgeStore.getState().loadProjectFromPath(path, { fromExternal: true });
+      }
+    } catch {
+      // unreadable / invalid file — ignore silently
+    }
+  }, []);
+
+  // Centralised open-file routing. Three sources feed handleOpenFile:
+  //  1. first-launch CLI arg (Windows/Linux double-click) via consume_pending_file
+  //  2. macOS file-association event
+  //  3. single-instance forwarding (second launch hands args to first window)
+  useEffect(() => {
+    invoke<string | null>("consume_pending_file").then((path) => {
+      if (path) handleOpenFile(path);
+    }).catch(() => {});
+
+    const unlisteners: Array<() => void> = [];
+    (async () => {
+      const u1 = await listen<string>("tauri://open-file", (e) => handleOpenFile(e.payload));
+      const u2 = await listen<string>("galdr://open-file", (e) => handleOpenFile(e.payload));
+      unlisteners.push(u1, u2);
+    })();
+    return () => unlisteners.forEach((u) => u());
+  }, [handleOpenFile]);
+
   // Load persisted settings on mount
   useEffect(() => {
     const store = useGaldrStore.getState();
@@ -59,6 +98,13 @@ function AppShell() {
       store.setShowRuneInTitlebar(s.showRuneInTitlebar);
       store.setDiscordEnabled(s.discordEnabled);
     }).catch(() => {});
+  }, []);
+
+  // Read OS autostart state on mount (autostart is OS-managed, not in settings.json)
+  useEffect(() => {
+    isAutostartEnabled()
+      .then((enabled) => useGaldrStore.getState().setAutostartEnabled(enabled))
+      .catch(() => {});
   }, []);
 
   // Check for forge recovery on mount
@@ -207,6 +253,11 @@ function AppShell() {
         { label: "forge", target: "forge" },
       ];
     }
+    if (page === "watch") {
+      return [
+        { label: "watch", target: "watch" },
+      ];
+    }
     return [{ label: page, target: page }];
   })();
 
@@ -221,6 +272,7 @@ function AppShell() {
       { label: "forge editor", rune: "ᚲ", action: () => setPage("forge") },
       { label: "", rune: "", action: () => {}, divider: true },
       { label: "rune tags", rune: "ᚠ", action: () => setPage("runes") },
+      { label: "watch folders", rune: "ᚱ", action: () => setPage("watch") },
       { label: "settings", rune: "ᚲ", action: () => setPage("settings") },
     ]);
   }, [show, setPage]);
@@ -295,6 +347,7 @@ function AppShell() {
           {page === "settings" && <SettingsPage onNavigate={setPage} />}
           {page === "runes" && <RunesPage />}
           {page === "forge" && <ForgePage />}
+          {page === "watch" && <WatchFoldersPage />}
         </PageTransition>
       </main>
     </div>

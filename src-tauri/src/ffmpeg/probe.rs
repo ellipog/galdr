@@ -78,3 +78,32 @@ fn parse_fraction(s: &str) -> Option<f64> {
     }
     None
 }
+
+/// Lightweight duration-only probe. Used by the builder to place audio
+/// fade-outs at the real end of the (trimmed/sped-up) media. Returns 0.0
+/// on any failure so it can never break argument generation.
+pub fn probe_duration(path: &Path) -> f64 {
+    let ffprobe = crate::ffmpeg::ffprobe_path();
+    let output = match Command::new(ffprobe)
+        .args([
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+        ])
+        .arg(path)
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return 0.0,
+    };
+    let raw: serde_json::Value = match serde_json::from_slice(&output.stdout) {
+        Ok(v) => v,
+        Err(_) => return 0.0,
+    };
+    raw["format"]["duration"]
+        .as_str()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.0)
+}
