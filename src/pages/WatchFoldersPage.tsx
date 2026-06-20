@@ -125,6 +125,7 @@ export default function WatchFoldersPage() {
             <div className="ops-row">
               <button
                 className={`ops-toggle${f.enabled ? " on" : ""}`}
+                style={{ padding: "6px 16px" }}
                 onClick={async () => {
                   const updated = await saveFolder({ ...f, enabled: !f.enabled });
                   void updated;

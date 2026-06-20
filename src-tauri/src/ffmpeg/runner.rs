@@ -16,10 +16,16 @@ pub fn run_conversion(
     duration: f64,
 ) -> std::result::Result<Vec<FfmpegEvent>, String> {
     let ffmpeg = crate::ffmpeg::ffmpeg_path();
-    let mut child = Command::new(ffmpeg)
-        .args(args)
+    let mut cmd = Command::new(ffmpeg);
+    cmd.args(args)
         .stderr(Stdio::piped())
-        .stdout(Stdio::null())
+        .stdout(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn ffmpeg: {}", e))?;
 
@@ -95,10 +101,14 @@ pub fn run_conversion(
 
 pub fn detect_ffmpeg() -> bool {
     let path = crate::ffmpeg::ffmpeg_path();
-    Command::new(path)
-        .arg("-version")
+    let mut cmd = Command::new(path);
+    cmd.arg("-version")
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok()
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd.status().is_ok()
 }

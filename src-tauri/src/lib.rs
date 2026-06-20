@@ -117,6 +117,7 @@ pub fn run() {
             commands::load_project_file,
             commands::read_file_bytes,
             commands::load_settings,
+            commands::save_app_preferences,
             commands::save_settings,
             commands::load_window_state,
             commands::save_window_state,

@@ -127,14 +127,12 @@ function AppShell() {
       clearTimeout((window as any)._settingsSaveTimer);
       (window as any)._settingsSaveTimer = setTimeout(() => {
         const s = useGaldrStore.getState();
-        invoke("save_settings", {
-          settings: {
-            outputDir: s.outputDir,
-            transitionStyle: s.transitionStyle,
-            crtEnabled: s.crtEnabled,
-            showRuneInTitlebar: s.showRuneInTitlebar,
-            discordEnabled: s.discordEnabled,
-          },
+        invoke("save_app_preferences", {
+          outputDir: s.outputDir,
+          transitionStyle: s.transitionStyle,
+          crtEnabled: s.crtEnabled,
+          showRuneInTitlebar: s.showRuneInTitlebar,
+          discordEnabled: s.discordEnabled,
         }).catch(() => {});
       }, 300);
     });

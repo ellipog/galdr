@@ -6,8 +6,8 @@ use crate::models::StreamInfo;
 
 pub fn probe_file(path: &Path) -> Result<MediaInfo, String> {
     let ffprobe = crate::ffmpeg::ffprobe_path();
-    let output = Command::new(ffprobe)
-        .args([
+    let mut cmd = Command::new(ffprobe);
+    cmd.args([
             "-v",
             "quiet",
             "-print_format",
@@ -15,8 +15,13 @@ pub fn probe_file(path: &Path) -> Result<MediaInfo, String> {
             "-show_format",
             "-show_streams",
         ])
-        .arg(path)
-        .output()
+        .arg(path);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd.output()
         .map_err(|e| format!("Failed to run ffprobe: {}", e))?;
 
     if !output.status.success() {
@@ -84,16 +89,21 @@ fn parse_fraction(s: &str) -> Option<f64> {
 /// on any failure so it can never break argument generation.
 pub fn probe_duration(path: &Path) -> f64 {
     let ffprobe = crate::ffmpeg::ffprobe_path();
-    let output = match Command::new(ffprobe)
-        .args([
+    let mut cmd = Command::new(ffprobe);
+    cmd.args([
             "-v",
             "quiet",
             "-print_format",
             "json",
             "-show_format",
         ])
-        .arg(path)
-        .output()
+        .arg(path);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let output = match cmd.output()
     {
         Ok(o) => o,
         Err(_) => return 0.0,

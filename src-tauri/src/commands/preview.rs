@@ -54,8 +54,8 @@ pub fn extract_frames(paths: Vec<String>, timestamp: f64) -> Result<Vec<String>,
         let out_path = temp_dir().join(format!("{}_{}.png", stem, uuid));
         let out_str = out_path.to_string_lossy().to_string();
 
-        let status = Command::new("ffmpeg")
-            .args([
+        let mut cmd = Command::new("ffmpeg");
+        cmd.args([
                 "-y",
                 "-i",
                 path,
@@ -68,8 +68,13 @@ pub fn extract_frames(paths: Vec<String>, timestamp: f64) -> Result<Vec<String>,
             ])
             .arg(&out_str)
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
+            .stderr(std::process::Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        let status = cmd.status()
             .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
 
         if status.success() && out_path.exists() {

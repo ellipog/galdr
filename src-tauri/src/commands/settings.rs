@@ -45,6 +45,30 @@ pub fn save_settings(settings: AppSettings) -> Result<(), String> {
     fs::write(&path, json).map_err(|e| e.to_string())
 }
 
+/// The frontend auto-saves preferences (output_dir, toggles, etc.) whenever
+/// the user changes any general setting.  We load the *full* `settings.json`
+/// off disk and only overwrite the UI-managed fields, so that
+/// backend-only fields such as `watch_folders` and `notify_on_watch_complete`
+/// are never accidentally wiped.
+#[tauri::command]
+pub fn save_app_preferences(
+    output_dir: String,
+    transition_style: String,
+    crt_enabled: bool,
+    show_rune_in_titlebar: bool,
+    discord_enabled: bool,
+) -> Result<(), String> {
+    let path = store_dir().join("settings.json");
+    let mut existing = load_settings();
+    existing.output_dir = output_dir;
+    existing.transition_style = transition_style;
+    existing.crt_enabled = crt_enabled;
+    existing.show_rune_in_titlebar = show_rune_in_titlebar;
+    existing.discord_enabled = discord_enabled;
+    let json = serde_json::to_string_pretty(&existing).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn load_window_state() -> Option<WindowState> {
     let path = store_dir().join("window-state.json");
