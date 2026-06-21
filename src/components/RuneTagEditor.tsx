@@ -71,6 +71,7 @@ export default function RuneTagEditor({ tag, onSave, onCancel }: Props) {
   const [description, setDescription] = useState(tag?.description ?? "");
   const [params, setParams] = useState<PresetParams>(tag?.params ?? { ...emptyParams });
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [triedSave, setTriedSave] = useState(false);
 
   const fmtOptions = useMemo(
     () => FMT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
@@ -81,6 +82,7 @@ export default function RuneTagEditor({ tag, onSave, onCancel }: Props) {
     setParams((p) => ({ ...p, [key]: value }));
 
   const handleSave = () => {
+    setTriedSave(true);
     if (!name.trim()) return;
     onSave({
       id: tag?.id ?? "",
@@ -140,14 +142,20 @@ export default function RuneTagEditor({ tag, onSave, onCancel }: Props) {
 
         <div className="rune-editor-body">
           <label className="rune-editor-field">
-            <span className="rune-editor-label">name</span>
+            <span className="rune-editor-label">
+              name
+              <span className="rune-editor-required">*</span>
+            </span>
             <input
               type="text"
-              className="input"
+              className={`input${triedSave && !name.trim() ? " input-error" : ""}`}
               placeholder="e.g. Fehu"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+            {triedSave && !name.trim() && (
+              <span className="rune-editor-validation">name is required</span>
+            )}
           </label>
 
           <label className="rune-editor-field">
@@ -353,6 +361,7 @@ export default function RuneTagEditor({ tag, onSave, onCancel }: Props) {
             className="btn btn-primary"
             onClick={handleSave}
             disabled={!name.trim()}
+            title={!name.trim() ? "name is required" : "save this rune tag"}
           >
             save
           </button>

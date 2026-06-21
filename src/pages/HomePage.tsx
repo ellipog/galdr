@@ -4,20 +4,21 @@ import { useGaldrStore } from "../store";
 import { useContextMenu } from "../components/ContextMenu";
 
 interface Props {
-  onNavigate: (page: "convert" | "compress" | "runes" | "forge" | "watch") => void;
+  onNavigate: (page: "convert" | "compress" | "runes" | "forge" | "watch" | "subtitles") => void;
 }
 
 interface ToolCard {
   rune: string;
   label: string;
   desc: string;
-  target: "convert" | "compress" | "runes" | "forge" | "watch";
+  target: "convert" | "compress" | "runes" | "forge" | "watch" | "subtitles";
 }
 
 const TOOLS: ToolCard[] = [
   { rune: "ᚨ", label: "convert", desc: "file conversion", target: "convert" },
   { rune: "ᛉ", label: "compress", desc: "file size reduction", target: "compress" },
   { rune: "ᚲ", label: "forge", desc: "video editor timeline", target: "forge" },
+  { rune: "ᛊ", label: "subtitles", desc: "transcribe & caption", target: "subtitles" },
   { rune: "ᚱ", label: "watch", desc: "auto-convert folders", target: "watch" },
   { rune: "ᚠ", label: "rune tags", desc: "saved presets", target: "runes" },
 ];

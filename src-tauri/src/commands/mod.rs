@@ -5,6 +5,7 @@ pub mod preview;
 pub mod reziser;
 pub mod rune_tags;
 pub mod settings;
+pub mod subtitles;
 pub mod watch_folder;
 
 pub use convert::*;
@@ -14,6 +15,7 @@ pub use preview::*;
 pub use reziser::*;
 pub use rune_tags::*;
 pub use settings::*;
+pub use subtitles::*;
 pub use watch_folder::*;
 
 /// Returns a `.galdr` path the app was launched with (first-instance

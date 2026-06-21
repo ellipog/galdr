@@ -127,6 +127,7 @@ pub fn set_browsing(page: &str) {
         "forge" => "Video Editor",
         "settings" => "Settings",
         "runes" => "Presets",
+        "subtitles" => "Subtitles",
         _ => page,
     };
     let details = format!("Browsing {}", label);
@@ -135,6 +136,23 @@ pub fn set_browsing(page: &str) {
             .state("")
             .details(&details)
             .assets(logo_assets(label))
+            .timestamps(Timestamps::new().start(now_secs())),
+    );
+}
+
+pub fn set_transcribing(filename: &str, progress: f64, model: &str, language: &str) {
+    let short_name = truncate(filename, 40);
+    let pct = (progress * 100.0).round() as i32;
+    let lang_label = if language.is_empty() || language == "auto" {
+        "auto-detect".to_string()
+    } else {
+        language.to_string()
+    };
+    set_activity(
+        Activity::new()
+            .state(format!("{}% — {} · {}", pct, model, lang_label))
+            .details(format!("Transcribing {}", short_name))
+            .assets(logo_assets("Transcribing…"))
             .timestamps(Timestamps::new().start(now_secs())),
     );
 }

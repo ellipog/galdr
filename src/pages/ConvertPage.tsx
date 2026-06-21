@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -8,10 +8,12 @@ import { useGaldrStore } from "../store";
 import Dropdown from "../components/Dropdown";
 import ScrambleText from "../components/ScrambleText";
 import ConvertOperations from "../components/ConvertOperations";
+import MediaInfoCard from "../components/MediaInfoCard";
 import ExtractFramesPanel from "../components/ExtractFramesPanel";
 import { FORMAT_OPTIONS, EXT_OPTIONS, FMT_OPTIONS } from "../options";
 import type { FormatOption } from "../options";
 import CommandPreview from "../components/CommandPreview";
+import LogPanel from "../components/LogPanel";
 import PresetPicker from "../components/PresetPicker";
 import { useContextMenu } from "../components/ContextMenu";
 import { applyRuneToConversion } from "../utils/runeMerge";
@@ -28,14 +30,6 @@ function detectMediaType(mi: import("../types").MediaInfo): MediaType {
   if (mi.streams.some((s) => s.kind === "audio") &&
     !mi.streams.some((s) => s.kind === "video")) return "audio";
   return "video";
-}
-
-function fmtDur(secs: number): string {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = Math.floor(secs % 60);
-  if (h) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function fmtSize(bytes: number): string {
@@ -115,7 +109,6 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
   const loadDirRef = useRef<any>(null);
   const fileListRef = useRef<HTMLDivElement>(null);
   const activeRowRef = useRef<HTMLDivElement>(null);
-  const batchLogPanelRef = useRef<HTMLDivElement>(null);
   const prevDoneRef = useRef(0);
 
   const extType = EXT_OPTIONS.find((e) => e.value === inputExt)?.type;
@@ -192,13 +185,6 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
     })();
     return () => { if (unlisten) unlisten(); };
   }, [mode]);
-
-  /* ── Auto-scroll batch log ── */
-  useEffect(() => {
-    if (batchLogPanelRef.current) {
-      batchLogPanelRef.current.scrollTop = batchLogPanelRef.current.scrollHeight;
-    }
-  }, [batchLog]);
 
   /* ── Auto-scroll active batch row ── */
   useEffect(() => {
@@ -700,13 +686,24 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
       {mode === "file" ? (
         /* ═══════════════ FILE MODE ═══════════════ */
         <>
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᛟ</span>
+            <span className="section-heading-label">input</span>
+          </div>
+
           <div
             className={`drop-zone${isDragOver ? " drag-over" : ""}${conversionParams.input_path ? " has-file" : ""}`}
             onClick={pickFile}
             onContextMenu={handleDropZoneContext}
           >
             {conversionParams.input_path ? (
-              <span className="drop-file">{conversionParams.input_path}</span>
+              <>
+                <span className="drop-file-icon">ᛉ</span>
+                <span className="drop-file-name">{conversionParams.input_path.split(/[/\\]/).pop()}</span>
+                <span className="drop-file-size">{mediaInfo ? fmtSize(mediaInfo.size) : ""}</span>
+                <span className="drop-file-change">change</span>
+              </>
             ) : (
               <>
                 <span className="drop-rune">ᚨ</span>
@@ -717,29 +714,11 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
 
           <AnimatePresence>
             {mediaInfo && (
-              <motion.div
-                className="media-info"
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
+              <MediaInfoCard
+                info={mediaInfo}
+                mediaType={mediaType}
                 onContextMenu={handleMediaInfoContext}
-              >
-              <div className="primary">
-                {mediaInfo.container} | {fmtDur(mediaInfo.duration)} | {fmtSize(mediaInfo.size)}
-                {mediaInfo.bitrate && ` | ${(mediaInfo.bitrate / 1000).toFixed(0)}kbps`}
-                {mediaType && ` | ${mediaType}`}
-              </div>
-              {mediaInfo.streams.map((s, i) => (
-                <div key={i} className="stream">
-                  [{s.kind}] {s.codec}
-                  {s.width && ` ${s.width}x${s.height}`}
-                  {s.frame_rate && ` @ ${s.frame_rate.toFixed(1)}fps`}
-                  {s.channels && ` ${s.channels}ch`}
-                  {s.sample_rate && ` ${(s.sample_rate / 1000).toFixed(0)}kHz`}
-                </div>
-              ))}
-              </motion.div>
+              />
             )}
           </AnimatePresence>
 
@@ -751,7 +730,11 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
             <ExtractFramesPanel inputPath={conversionParams.input_path} mediaInfo={mediaInfo} />
           )}
 
-          <ScrambleText as="div" className="rune-divider" text="ᛟ ᛟ ᛟ ᛟ ᛟ" hover ticks={4} />
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᚦ</span>
+            <span className="section-heading-label">settings</span>
+          </div>
 
           <PresetPicker currentParams={conversionParams} onApply={handleApplyRune} onManage={onNavigate ? () => onNavigate("runes") : undefined} />
 
@@ -774,6 +757,12 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
           )}
 
           {error && <div className="alert-error" onContextMenu={handleErrorAlertContext}>! {error}</div>}
+
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᛟ</span>
+            <span className="section-heading-label">output</span>
+          </div>
 
           <div className="convert-actions">
             <button
@@ -800,9 +789,7 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
           )}
 
           {log.length > 0 && (
-            <div className="log-panel" onContextMenu={handleLogContext}>
-              {log.map((l, i) => <div key={i} className="log-line">{l}</div>)}
-            </div>
+            <LogPanel lines={log} onContextMenu={handleLogContext} />
           )}
 
           {lastOutputPath && (
@@ -823,6 +810,12 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
       ) : (
         /* ═══════════════ BATCH MODE ═══════════════ */
         <div className={isBatchDragOver ? "batch-dragging" : ""}>
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᚷ</span>
+            <span className="section-heading-label">batch settings</span>
+          </div>
+
           <div className="batch-layout">
             <div className="batch-left">
 
@@ -962,9 +955,7 @@ export default function ConvertPage({ onNavigate }: { onNavigate?: NavigateFn })
                   </div>
 
                   {batchLog.length > 0 && (
-                    <div className="log-panel" ref={batchLogPanelRef} onContextMenu={handleBatchLogContext}>
-                      {batchLog.map((l, i) => <div key={i} className="log-line">{l}</div>)}
-                    </div>
+                    <LogPanel lines={batchLog} onContextMenu={handleBatchLogContext} />
                   )}
 
                   {files.length > 0 && inputDir && batchOutputDir && (

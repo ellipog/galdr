@@ -1,0 +1,90 @@
+/**
+ * Curated list of languages whisper.cpp can transcribe. whisper.cpp uses
+ * lowercase ISO 639-1 codes. The full multilingual models recognize ~99
+ * languages; this covers all the common ones with readable English labels.
+ *
+ * "auto" appears first so the default is detection.
+ */
+export interface LanguageOption {
+  value: string;
+  label: string;
+}
+
+export const LANGUAGE_OPTIONS: LanguageOption[] = [
+  { value: "auto", label: "auto-detect" },
+  { value: "en", label: "English" },
+  { value: "zh", label: "Chinese" },
+  { value: "es", label: "Spanish" },
+  { value: "hi", label: "Hindi" },
+  { value: "ar", label: "Arabic" },
+  { value: "pt", label: "Portuguese" },
+  { value: "ru", label: "Russian" },
+  { value: "ja", label: "Japanese" },
+  { value: "de", label: "German" },
+  { value: "fr", label: "French" },
+  { value: "ko", label: "Korean" },
+  { value: "it", label: "Italian" },
+  { value: "tr", label: "Turkish" },
+  { value: "nl", label: "Dutch" },
+  { value: "pl", label: "Polish" },
+  { value: "uk", label: "Ukrainian" },
+  { value: "id", label: "Indonesian" },
+  { value: "vi", label: "Vietnamese" },
+  { value: "th", label: "Thai" },
+  { value: "sv", label: "Swedish" },
+  { value: "no", label: "Norwegian" },
+  { value: "da", label: "Danish" },
+  { value: "fi", label: "Finnish" },
+  { value: "cs", label: "Czech" },
+  { value: "el", label: "Greek" },
+  { value: "he", label: "Hebrew" },
+  { value: "fa", label: "Persian" },
+  { value: "ms", label: "Malay" },
+  { value: "ta", label: "Tamil" },
+  { value: "ur", label: "Urdu" },
+  { value: "bn", label: "Bengali" },
+  { value: "ca", label: "Catalan" },
+  { value: "ro", label: "Romanian" },
+  { value: "hu", label: "Hungarian" },
+  { value: "sk", label: "Slovak" },
+  { value: "bg", label: "Bulgarian" },
+  { value: "hr", label: "Croatian" },
+  { value: "sr", label: "Serbian" },
+  { value: "sl", label: "Slovenian" },
+  { value: "lt", label: "Lithuanian" },
+  { value: "lv", label: "Latvian" },
+  { value: "et", label: "Estonian" },
+  { value: "is", label: "Icelandic" },
+  { value: "ga", label: "Irish" },
+  { value: "cy", label: "Welsh" },
+  { value: "eu", label: "Basque" },
+  { value: "gl", label: "Galician" },
+  { value: "af", label: "Afrikaans" },
+  { value: "sw", label: "Swahili" },
+  { value: "tl", label: "Tagalog" },
+  { value: "yi", label: "Yiddish" },
+  { value: "la", label: "Latin" },
+  { value: "fo", label: "Faroese" },
+  { value: "ha", label: "Hausa" },
+  { value: "yo", label: "Yoruba" },
+  { value: "zu", label: "Zulu" },
+  { value: "wo", label: "Wolof" },
+  { value: "mn", label: "Mongolian" },
+  { value: "kk", label: "Kazakh" },
+  { value: "uz", label: "Uzbek" },
+  { value: "my", label: "Burmese" },
+  { value: "km", label: "Khmer" },
+  { value: "lo", label: "Lao" },
+  { value: "ne", label: "Nepali" },
+  { value: "si", label: "Sinhala" },
+  { value: "mr", label: "Marathi" },
+  { value: "gu", label: "Gujarati" },
+  { value: "pa", label: "Punjabi" },
+  { value: "ml", label: "Malayalam" },
+  { value: "kn", label: "Kannada" },
+  { value: "te", label: "Telugu" },
+];
+
+export const LANGUAGE_LABEL: Record<string, string> = Object.fromEntries(
+  LANGUAGE_OPTIONS.map((o) => [o.value, o.label]),
+);

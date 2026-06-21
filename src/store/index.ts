@@ -34,6 +34,8 @@ interface GaldrState {
   showRuneInTitlebar: boolean;
   discordEnabled: boolean;
   autostartEnabled: boolean;
+  /** Runes loaded from an externally-opened .galdr file, awaiting user review. */
+  pendingRunesImport: { runes: RuneTag[]; sourceName: string } | null;
 
   setMediaInfo: (info: MediaInfo | null) => void;
   setConversionParams: (params: Partial<ConversionParams>) => void;
@@ -64,6 +66,7 @@ interface GaldrState {
   setShowRuneInTitlebar: (v: boolean) => void;
   setDiscordEnabled: (v: boolean) => void;
   setAutostartEnabled: (v: boolean) => void;
+  setPendingRunesImport: (data: { runes: RuneTag[]; sourceName: string } | null) => void;
 }
 
 const defaultParams: ConversionParams = {
@@ -124,6 +127,7 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   showRuneInTitlebar: true,
   discordEnabled: true,
   autostartEnabled: false,
+  pendingRunesImport: null,
 
   setMediaInfo: (info) => set({ mediaInfo: info }),
   setConversionParams: (params) =>
@@ -178,4 +182,5 @@ export const useGaldrStore = create<GaldrState>((set) => ({
   setShowRuneInTitlebar: (v) => set({ showRuneInTitlebar: v }),
   setDiscordEnabled: (v) => set({ discordEnabled: v }),
   setAutostartEnabled: (v) => set({ autostartEnabled: v }),
+  setPendingRunesImport: (data) => set({ pendingRunesImport: data }),
 }));

@@ -52,6 +52,13 @@ export interface RuneTag {
   params: PresetParams;
 }
 
+/** Wrapper format for `.galdr` files containing rune presets. */
+export interface GaldrRunesFile {
+  type: "galdr-runes";
+  version: string;
+  runes: RuneTag[];
+}
+
 export interface StreamInfo {
   index: number;
   kind: string;
@@ -208,4 +215,62 @@ export interface WatchActivity {
   outputPath?: string;
   error?: string;
 }
+
+// ── Subtitles / Whisper ──
+
+/** A single subtitle cue parsed from SRT/VTT. */
+export interface Cue {
+  index: number;
+  /** Start time in seconds. */
+  start: number;
+  /** End time in seconds. */
+  end: number;
+  text: string;
+}
+
+/** A whisper.cpp ggml model offered for download. */
+export interface WhisperModel {
+  id: string;
+  label: string;
+  fileName: string;
+  url: string;
+  sizeBytes: number;
+  languageClass: "multilingual" | "english-only";
+  tier: "fast" | "balanced" | "accurate" | "best";
+  description: string;
+  installed: boolean;
+}
+
+export interface WhisperStatus {
+  available: boolean;
+  resolvedPath: string;
+  models: WhisperModel[];
+  anyInstalled: boolean;
+}
+
+export interface TranscribeParams {
+  inputPath: string;
+  modelId: string;
+  /** ISO language code, or "auto" for detection. */
+  language: string;
+  translateToEnglish: boolean;
+  /** "srt" | "vtt" | "json" | "all" */
+  outputFormat: string;
+  outputDir: string;
+}
+
+export interface TranscribeResult {
+  srtPath: string | null;
+  vttPath: string | null;
+  jsonPath: string | null;
+  outputDir: string;
+}
+
+export interface DownloadProgress {
+  modelId: string;
+  progress: number;
+  downloadedBytes: number;
+  totalBytes: number;
+}
+
 

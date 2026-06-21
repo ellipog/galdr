@@ -12,6 +12,7 @@ import SettingsPage from "./pages/SettingsPage";
 import RunesPage from "./pages/RunesPage";
 import ForgePage from "./pages/ForgePage";
 import WatchFoldersPage from "./pages/WatchFoldersPage";
+import SubtitlesPage from "./pages/SubtitlesPage";
 import ScrambleText from "./components/ScrambleText";
 import UpdateBanner from "./components/UpdateBanner";
 import PageTransition from "./transitions";
@@ -33,7 +34,7 @@ const PERSIST_FIELDS: (keyof AppSettings)[] = [
   "outputDir", "transitionStyle", "crtEnabled", "showRuneInTitlebar", "discordEnabled",
 ];
 
-type Page = "home" | "convert" | "compress" | "settings" | "runes" | "forge" | "watch";
+type Page = "home" | "convert" | "compress" | "settings" | "runes" | "forge" | "watch" | "subtitles";
 
 function AppShell() {
   const [page, setPage] = useState<Page>("home");
@@ -54,16 +55,26 @@ function AppShell() {
   }, []);
 
   // Routes an externally-opened .galdr file: inspect its content and open the
-  // right page. Currently forge is the only app, but the discriminator leaves
-  // room for more.
+  // right page. The `type` field discriminates forge projects from rune
+  // collections — both share the .galdr extension.
   const handleOpenFile = useCallback(async (path: string) => {
     try {
       const raw = await invoke<string>("load_project_file", { path });
       const file = JSON.parse(raw) as GaldrProjectFile;
-      if (file.type !== "galdr-project") return;
-      if (file.app === "forge") {
-        setPage("forge");
-        await useForgeStore.getState().loadProjectFromPath(path, { fromExternal: true });
+      if (file.type === "galdr-project") {
+        if (file.app === "forge") {
+          setPage("forge");
+          await useForgeStore.getState().loadProjectFromPath(path, { fromExternal: true });
+        }
+        return;
+      }
+      if (file.type === "galdr-runes" && Array.isArray((file as any).runes)) {
+        const sourceName = path.split(/[/\\]/).pop() || path;
+        useGaldrStore.getState().setPendingRunesImport({
+          runes: (file as any).runes,
+          sourceName,
+        });
+        setPage("runes");
       }
     } catch {
       // unreadable / invalid file — ignore silently
@@ -254,6 +265,11 @@ function AppShell() {
         { label: "watch", target: "watch" },
       ];
     }
+    if (page === "subtitles") {
+      return [
+        { label: "subtitles", target: "subtitles" },
+      ];
+    }
     return [{ label: page, target: page }];
   })();
 
@@ -265,6 +281,7 @@ function AppShell() {
       { label: "quick convert", rune: "ᛏ", action: () => setPage("convert") },
       { label: "compress", rune: "ᛉ", action: () => setPage("compress") },
       { label: "forge editor", rune: "ᚲ", action: () => setPage("forge") },
+      { label: "subtitles", rune: "ᛊ", action: () => setPage("subtitles") },
       { label: "", rune: "", action: () => {}, divider: true },
       { label: "rune tags", rune: "ᚠ", action: () => setPage("runes") },
       { label: "watch folders", rune: "ᚱ", action: () => setPage("watch") },
@@ -342,6 +359,7 @@ function AppShell() {
           {page === "runes" && <RunesPage />}
           {page === "forge" && <ForgePage />}
           {page === "watch" && <WatchFoldersPage />}
+          {page === "subtitles" && <SubtitlesPage />}
         </PageTransition>
       </main>
     </div>

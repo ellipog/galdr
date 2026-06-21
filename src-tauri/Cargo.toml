@@ -33,6 +33,12 @@ base64 = "0.22"
 discord-rich-presence = "1"
 once_cell = "1"
 notify = "6"
+# Blocking HTTP client for whisper model downloads (rustls avoids a system
+# OpenSSL dependency on Windows).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+# Tauri runs commands on tokio; we need spawn_blocking for the blocking
+# ffmpeg/whisper/download work so async commands stay responsive.
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 zip = { version = "4", default-features = false, features = ["deflate"] }

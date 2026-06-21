@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversionParams {
+    #[serde(default)]
     pub input_path: PathBuf,
+    #[serde(default)]
     pub output_dir: PathBuf,
     pub output_format: String,
     pub video_codec: Option<String>,

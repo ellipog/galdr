@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -7,10 +7,12 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useGaldrStore } from "../store";
 import CustomSelect from "../components/CustomSelect";
 import Dropdown from "../components/Dropdown";
-import QualitySlider from "../components/QualitySlider";
 import ScrambleText from "../components/ScrambleText";
 import MediaPreview from "../components/MediaPreview";
+import MediaInfoCard from "../components/MediaInfoCard";
+import CompressionControls from "../components/CompressionControls";
 import CommandPreview from "../components/CommandPreview";
+import LogPanel from "../components/LogPanel";
 import PresetPicker from "../components/PresetPicker";
 import { EXT_OPTIONS, FMT_OPTIONS } from "../options";
 import { useContextMenu } from "../components/ContextMenu";
@@ -135,7 +137,6 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
   const loadDirRef = useRef<any>(null);
   const fileListRef = useRef<HTMLDivElement>(null);
   const activeRowRef = useRef<HTMLDivElement>(null);
-  const batchLogPanelRef = useRef<HTMLDivElement>(null);
   const batchPrevDoneRef = useRef(0);
 
   const extType = EXT_OPTIONS.find((e) => e.value === inputExt)?.type;
@@ -212,13 +213,6 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
     })();
     return () => { if (unlisten) unlisten(); };
   }, [mode]);
-
-  /* ── Auto-scroll batch log ── */
-  useEffect(() => {
-    if (batchLogPanelRef.current) {
-      batchLogPanelRef.current.scrollTop = batchLogPanelRef.current.scrollHeight;
-    }
-  }, [batchLog]);
 
   /* ── Auto-scroll active batch row ── */
   useEffect(() => {
@@ -803,13 +797,24 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
       {mode === "file" ? (
         /* ═══════════════ FILE MODE ═══════════════ */
         <>
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᛟ</span>
+            <span className="section-heading-label">input</span>
+          </div>
+
           <div
             className={`drop-zone${isDragOver ? " drag-over" : ""}${inputPath ? " has-file" : ""}`}
             onClick={pickFile}
             onContextMenu={handleCompressDropZoneContext}
           >
             {inputPath ? (
-              <span className="drop-file">{inputPath}</span>
+              <>
+                <span className="drop-file-icon">ᛉ</span>
+                <span className="drop-file-name">{inputPath.split(/[/\\]/).pop()}</span>
+                <span className="drop-file-size">{mediaInfo ? fmtSize(mediaInfo.size) : ""}</span>
+                <span className="drop-file-change">change</span>
+              </>
             ) : (
               <>
                 <span className="drop-rune">ᛉ</span>
@@ -820,104 +825,57 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
 
           <AnimatePresence>
             {mediaInfo && (
-              <motion.div
-                className="media-info"
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
+              <MediaInfoCard
+                info={mediaInfo}
+                mediaType={mediaType}
                 onContextMenu={handleCompressMediaInfoContext}
-              >
-                <div className="primary">
-                  {mediaInfo.container} | {fmtSize(mediaInfo.size)}
-                  {mediaInfo.bitrate && ` | ${(mediaInfo.bitrate / 1000).toFixed(0)}kbps`}
-                  {mediaType && ` | ${mediaType}`}
-                </div>
-                {mediaInfo.streams.map((s, i) => (
-                  <div key={i} className="stream">
-                    [{s.kind}] {s.codec}
-                    {s.width && ` ${s.width}x${s.height}`}
-                    {s.frame_rate && ` @ ${s.frame_rate.toFixed(1)}fps`}
-                    {s.channels && ` ${s.channels}ch`}
-                    {s.sample_rate && ` ${(s.sample_rate / 1000).toFixed(0)}kHz`}
-                  </div>
-                ))}
-              </motion.div>
+              />
             )}
           </AnimatePresence>
 
-          <ScrambleText as="div" className="rune-divider" text="ᛟ ᛟ ᛟ ᛟ ᛟ" hover ticks={4} />
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᚠ</span>
+            <span className="section-heading-label">settings</span>
+          </div>
 
           <PresetPicker currentParams={compressParams} onApply={handleApplyRune} onManage={onNavigate ? () => onNavigate("runes") : undefined} />
 
-          {/* ── Mode toggle: quality vs target size ── */}
-          <div className="mode-toggle-group">
-            <button
-              className={`mode-toggle-btn${compressionMode === "quality" ? " active" : ""}`}
-              onClick={() => setCompressionMode("quality")}
-            >
-              ᚠ quality
-            </button>
-            <button
-              className={`mode-toggle-btn${compressionMode === "targetSize" ? " active" : ""}`}
-              onClick={() => setCompressionMode("targetSize")}
-            >
-              ᚨ target size
-            </button>
-          </div>
-
-          {compressionMode === "quality" ? (
-            <div onContextMenu={handleQualitySliderContext}>
-              <QualitySlider
-                label="quality"
-                value={quality}
-                onChange={setQuality}
-              />
-            </div>
-          ) : (
-            <div className="card" onContextMenu={handleTargetSizeContext}>
-              <label className="label">target file size</label>
-              <div className="target-size-input-row">
-                <input
-                  className="input target-size-input"
-                  type="number"
-                  min={1}
-                  value={targetSizeValue}
-                  onChange={(e) => setTargetSizeValue(Math.max(1, Number(e.target.value) || 1))}
-                />
-                <div className="target-size-unit-group">
-                  <button
-                    className={`target-size-unit-btn${targetSizeUnit === "MB" ? " active" : ""}`}
-                    onClick={() => setTargetSizeUnit("MB")}
-                  >
-                    MB
-                  </button>
-                  <button
-                    className={`target-size-unit-btn${targetSizeUnit === "KB" ? " active" : ""}`}
-                    onClick={() => setTargetSizeUnit("KB")}
-                  >
-                    KB
-                  </button>
-                </div>
-              </div>
-              {mediaInfo && mediaInfo.duration > 0 && (
-                <div className="target-size-info">
-                  ≈ {fmtSize(targetSizeBytes || 0)} &nbsp;·&nbsp; {Math.round((targetSizeBytes || 0) * 8 / mediaInfo.duration / 1000)} kbps
-                </div>
-              )}
-            </div>
-          )}
+          <CompressionControls
+            mode={compressionMode}
+            onModeChange={setCompressionMode}
+            quality={quality}
+            onQualityChange={setQuality}
+            targetSizeValue={targetSizeValue}
+            onTargetSizeValueChange={setTargetSizeValue}
+            targetSizeUnit={targetSizeUnit}
+            onTargetSizeUnitChange={setTargetSizeUnit}
+            targetSizeBytes={targetSizeBytes ?? 0}
+            estimatedDuration={mediaInfo?.duration}
+            onQualitySliderContext={handleQualitySliderContext}
+            onTargetSizeContext={handleTargetSizeContext}
+          />
 
           {estimate && (
             <div className={`estimate-bar${sizeIncrease ? " estimate-warn" : ""}`} onContextMenu={handleEstimateContext}>
-              <span className="estimate-original">{fmtSize(estimate.original)}</span>
-              <span className="estimate-arrow">→</span>
-              <span className="estimate-result">{fmtSize(estimate.estimated)}</span>
-              <span className="estimate-pct">
-                {sizeIncrease
-                  ? `+${Math.round((estimate.estimated / estimate.original - 1) * 100)}% increase`
-                  : `-${Math.round((1 - estimate.estimated / estimate.original) * 100)}%`}
-              </span>
+              <div className="estimate-labels">
+                <span className="estimate-original">{fmtSize(estimate.original)}</span>
+                <span className="estimate-arrow">→</span>
+                <span className="estimate-result">{fmtSize(estimate.estimated)}</span>
+                <span className="estimate-pct">
+                  {sizeIncrease
+                    ? `+${Math.round((estimate.estimated / estimate.original - 1) * 100)}% increase`
+                    : `-${Math.round((1 - estimate.estimated / estimate.original) * 100)}%`}
+                </span>
+              </div>
+              <div className="estimate-track">
+                <div
+                  className="estimate-fill"
+                  style={{
+                    width: `${Math.min(estimate.estimated / estimate.original * 100, 100)}%`,
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -944,6 +902,12 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
 
           {error && <div className="alert-error" onContextMenu={handleCompressErrorContext}>! {error}</div>}
 
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᛟ</span>
+            <span className="section-heading-label">output</span>
+          </div>
+
           <div className="convert-actions">
             <button
               className={`btn btn-primary${sizeIncrease ? " btn-warn" : ""}`}
@@ -969,9 +933,7 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
           )}
 
           {log.length > 0 && (
-            <div className="log-panel" onContextMenu={handleCompressLogContext}>
-              {log.map((l, i) => <div key={i} className="log-line">{l}</div>)}
-            </div>
+            <LogPanel lines={log} onContextMenu={handleCompressLogContext} />
           )}
 
           {lastOutputPath && (
@@ -1001,6 +963,12 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
       ) : (
         /* ═══════════════ BATCH MODE ═══════════════ */
         <div className={isBatchDragOver ? "batch-dragging" : ""}>
+          <div className="section-heading">
+            <span className="section-heading-line" />
+            <span className="section-heading-rune">ᚷ</span>
+            <span className="section-heading-label">batch settings</span>
+          </div>
+
           <div className="batch-layout">
             <div className="batch-left">
 
@@ -1022,61 +990,19 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
 
               <PresetPicker currentParams={batchParams} onApply={handleApplyRune} onManage={onNavigate ? () => onNavigate("runes") : undefined} />
 
-              {/* ── Mode toggle: quality vs target size ── */}
-              <div className="mode-toggle-group">
-                <button
-                  className={`mode-toggle-btn${compressionMode === "quality" ? " active" : ""}`}
-                  onClick={() => setCompressionMode("quality")}
-                >
-                  ᚠ quality
-                </button>
-                <button
-                  className={`mode-toggle-btn${compressionMode === "targetSize" ? " active" : ""}`}
-                  onClick={() => setCompressionMode("targetSize")}
-                >
-                  ᚨ target size
-                </button>
-              </div>
-
-              {compressionMode === "quality" ? (
-                <div onContextMenu={handleQualitySliderContext}>
-                  <QualitySlider
-                    label="quality"
-                    value={quality}
-                    onChange={setQuality}
-                  />
-                </div>
-              ) : (
-                <div className="card" onContextMenu={handleTargetSizeContext}>
-                  <label className="label">target file size</label>
-                  <div className="target-size-input-row">
-                    <input
-                      className="input target-size-input"
-                      type="number"
-                      min={1}
-                      value={targetSizeValue}
-                      onChange={(e) => setTargetSizeValue(Math.max(1, Number(e.target.value) || 1))}
-                    />
-                    <div className="target-size-unit-group">
-                      <button
-                        className={`target-size-unit-btn${targetSizeUnit === "MB" ? " active" : ""}`}
-                        onClick={() => setTargetSizeUnit("MB")}
-                      >
-                        MB
-                      </button>
-                      <button
-                        className={`target-size-unit-btn${targetSizeUnit === "KB" ? " active" : ""}`}
-                        onClick={() => setTargetSizeUnit("KB")}
-                      >
-                        KB
-                      </button>
-                    </div>
-                  </div>
-                  <div className="target-size-info">
-                    ≈ {fmtSize(targetSizeBytes || 0)} overall per file
-                  </div>
-                </div>
-              )}
+              <CompressionControls
+                mode={compressionMode}
+                onModeChange={setCompressionMode}
+                quality={quality}
+                onQualityChange={setQuality}
+                targetSizeValue={targetSizeValue}
+                onTargetSizeValueChange={setTargetSizeValue}
+                targetSizeUnit={targetSizeUnit}
+                onTargetSizeUnitChange={setTargetSizeUnit}
+                targetSizeBytes={targetSizeBytes ?? 0}
+                onQualitySliderContext={handleQualitySliderContext}
+                onTargetSizeContext={handleTargetSizeContext}
+              />
 
               <div className="batch-format-row">
                 <div className="card batch-card" onContextMenu={handleBatchExtCardContext}>
@@ -1194,9 +1120,7 @@ export default function CompressPage({ onNavigate }: { onNavigate?: NavigateFn }
                   </div>
 
                   {batchLog.length > 0 && (
-                    <div className="log-panel" ref={batchLogPanelRef} onContextMenu={handleBatchLogContext}>
-                      {batchLog.map((l, i) => <div key={i} className="log-line">{l}</div>)}
-                    </div>
+                    <LogPanel lines={batchLog} onContextMenu={handleBatchLogContext} />
                   )}
 
                   {batchFiles.length > 0 && inputDir && batchOutputDir && (

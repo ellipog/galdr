@@ -4,6 +4,7 @@ mod ffmpeg;
 mod models;
 mod tray;
 mod watcher;
+mod whisper;
 
 use models::settings::WindowState;
 use once_cell::sync::Lazy;
@@ -44,6 +45,7 @@ pub fn run() {
         }))
         .setup(|app| {
             ffmpeg::init_paths(&app.handle());
+            whisper::init_paths(&app.handle());
             discord_rpc::connect(DISCORD_CLIENT_ID);
             // Apply the saved discord-enabled setting BEFORE the first
             // set_idle, so RPC only goes live if the user left it on.
@@ -134,6 +136,14 @@ pub fn run() {
             commands::dequeue_file,
             commands::clear_queue,
             commands::convert_queued_file,
+            commands::list_whisper_models,
+            commands::is_whisper_available,
+            commands::install_whisper_model,
+            commands::delete_whisper_model,
+            commands::detect_spoken_language,
+            commands::transcribe_audio,
+            commands::cancel_transcription,
+            commands::whisper_status,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
