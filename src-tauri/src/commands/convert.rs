@@ -98,7 +98,7 @@ pub fn run_single_conversion<R: tauri::Runtime>(
                     message: "pass 1/2 analysis".to_string(),
                 },
             );
-            let pass1_events = run_conversion(&pass1, effective_duration)?;
+            let pass1_events = run_conversion(&pass1, effective_duration, |_| {})?;
             for ev in &pass1_events {
                 match ev {
                     crate::ffmpeg::FfmpegEvent::Error(msg) => {
@@ -121,40 +121,42 @@ pub fn run_single_conversion<R: tauri::Runtime>(
         }
 
         // Run pass 2 (or the only pass for audio/GIF)
-        let pass2_events = run_conversion(&pass2, effective_duration)?;
-        let pass2_out = pass2_events.iter().find_map(|ev| {
-            if let crate::ffmpeg::FfmpegEvent::Done(path) = ev {
-                Some(path.clone())
-            } else {
-                None
-            }
-        });
-
-        // Clean up pass log files
-        let _ = std::fs::remove_file("ffmpeg2pass-0.log");
-        let _ = std::fs::remove_file("ffmpeg2pass-0.log.mbtree");
-
-        // Re-emit events for pass 2 (progress, log, done/error)
-        for ev in &pass2_events {
+        let pass2_app = app_handle.clone();
+        let pass2_fname = file_name.clone();
+        let pass2_fmt = params.output_format.clone();
+        let pass2_jid = job_id.to_string();
+        let pass2_src = source_format.map(|s| s.to_string());
+        let pass2_events = run_conversion(&pass2, effective_duration, move |ev| {
             match ev {
                 crate::ffmpeg::FfmpegEvent::Progress(p) => {
-                    discord_rpc::set_converting(&file_name, *p, &params.output_format, source_format);
-                    let _ = app_handle.emit(
+                    discord_rpc::set_converting(&pass2_fname, *p, &pass2_fmt, pass2_src.as_deref());
+                    let _ = pass2_app.emit(
                         "conversion-progress",
                         ConversionProgressPayload {
-                            job_id: job_id.to_string(),
+                            job_id: pass2_jid.clone(),
                             progress: *p,
                         },
                     );
                 }
                 crate::ffmpeg::FfmpegEvent::Log(msg) => {
-                    let _ = app_handle.emit(
+                    let _ = pass2_app.emit(
                         "conversion-log",
                         ConversionLogPayload {
                             message: msg.clone(),
                         },
                     );
                 }
+                _ => {}
+            }
+        })?;
+
+        // Clean up pass log files
+        let _ = std::fs::remove_file("ffmpeg2pass-0.log");
+        let _ = std::fs::remove_file("ffmpeg2pass-0.log.mbtree");
+
+        // Handle Done/Error from events
+        for ev in &pass2_events {
+            match ev {
                 crate::ffmpeg::FfmpegEvent::Done(path) => {
                     discord_rpc::track_conversion();
                     discord_rpc::set_idle();
@@ -167,14 +169,42 @@ pub fn run_single_conversion<R: tauri::Runtime>(
                     discord_rpc::set_idle();
                     return Err(msg.clone());
                 }
+                _ => {}
             }
         }
 
-        (pass2_events, pass2_out)
+        (pass2_events, None)
     } else {
         // ── Normal quality mode (existing behaviour) ──
         let args = build_args(&params);
-        let events = run_conversion(&args, effective_duration)?;
+        let norm_app = app_handle.clone();
+        let norm_fname = file_name.clone();
+        let norm_fmt = params.output_format.clone();
+        let norm_jid = job_id.to_string();
+        let norm_src = source_format.map(|s| s.to_string());
+        let events = run_conversion(&args, effective_duration, move |ev| {
+            match ev {
+                crate::ffmpeg::FfmpegEvent::Progress(p) => {
+                    discord_rpc::set_converting(&norm_fname, *p, &norm_fmt, norm_src.as_deref());
+                    let _ = norm_app.emit(
+                        "conversion-progress",
+                        ConversionProgressPayload {
+                            job_id: norm_jid.clone(),
+                            progress: *p,
+                        },
+                    );
+                }
+                crate::ffmpeg::FfmpegEvent::Log(msg) => {
+                    let _ = norm_app.emit(
+                        "conversion-log",
+                        ConversionLogPayload {
+                            message: msg.clone(),
+                        },
+                    );
+                }
+                _ => {}
+            }
+        })?;
         let output = events.iter().find_map(|ev| {
             if let crate::ffmpeg::FfmpegEvent::Done(path) = ev {
                 Some(path.clone())
@@ -185,28 +215,9 @@ pub fn run_single_conversion<R: tauri::Runtime>(
         (events, output)
     };
 
-    // Common event emission (only reached for the normal quality path here;
-    // the target-size path returns early above)
+    // Handle Done/Error from events (Progress/Log already emitted via callback)
     for event in &events {
         match event {
-            crate::ffmpeg::FfmpegEvent::Progress(p) => {
-                discord_rpc::set_converting(&file_name, *p, &params.output_format, source_format);
-                let _ = app_handle.emit(
-                    "conversion-progress",
-                    ConversionProgressPayload {
-                        job_id: job_id.to_string(),
-                        progress: *p,
-                    },
-                );
-            }
-            crate::ffmpeg::FfmpegEvent::Log(msg) => {
-                let _ = app_handle.emit(
-                    "conversion-log",
-                    ConversionLogPayload {
-                        message: msg.clone(),
-                    },
-                );
-            }
             crate::ffmpeg::FfmpegEvent::Done(path) => {
                 discord_rpc::track_conversion();
                 discord_rpc::set_idle();
@@ -219,6 +230,7 @@ pub fn run_single_conversion<R: tauri::Runtime>(
                 discord_rpc::set_idle();
                 return Err(msg.clone());
             }
+            _ => {}
         }
     }
 
@@ -289,15 +301,13 @@ pub async fn concat_videos(
     }
     args.push(output_path.clone());
 
-    let events = run_conversion(&args, total_duration);
-    let _ = std::fs::remove_file(&list_path);
-    let events = events?;
-
-    for event in &events {
-        match event {
+    let concat_app = app_handle.clone();
+    let concat_fname = file_name.clone();
+    let events = run_conversion(&args, total_duration, move |ev| {
+        match ev {
             crate::ffmpeg::FfmpegEvent::Progress(p) => {
-                discord_rpc::set_converting(&file_name, *p, "concat", None);
-                let _ = app_handle.emit(
+                discord_rpc::set_converting(&concat_fname, *p, "concat", None);
+                let _ = concat_app.emit(
                     "conversion-progress",
                     ConversionProgressPayload {
                         job_id: "concat".to_string(),
@@ -306,11 +316,19 @@ pub async fn concat_videos(
                 );
             }
             crate::ffmpeg::FfmpegEvent::Log(msg) => {
-                let _ = app_handle.emit(
+                let _ = concat_app.emit(
                     "conversion-log",
                     ConversionLogPayload { message: msg.clone() },
                 );
             }
+            _ => {}
+        }
+    });
+    let _ = std::fs::remove_file(&list_path);
+    let events = events?;
+
+    for event in &events {
+        match event {
             crate::ffmpeg::FfmpegEvent::Done(path) => {
                 discord_rpc::track_conversion();
                 discord_rpc::set_idle();
@@ -323,6 +341,7 @@ pub async fn concat_videos(
                 discord_rpc::set_idle();
                 return Err(msg.clone());
             }
+            _ => {}
         }
     }
 
@@ -377,13 +396,14 @@ pub async fn extract_audio(
     }
     args.push(output_path.clone());
 
-    let events = run_conversion(&args, duration)?;
-
-    for event in &events {
-        match event {
+    let audio_app = app_handle.clone();
+    let audio_fname = file_name.clone();
+    let audio_fmt = audio_format.clone();
+    let events = run_conversion(&args, duration, move |ev| {
+        match ev {
             crate::ffmpeg::FfmpegEvent::Progress(p) => {
-                discord_rpc::set_converting(&file_name, *p, &audio_format, None);
-                let _ = app_handle.emit(
+                discord_rpc::set_converting(&audio_fname, *p, &audio_fmt, None);
+                let _ = audio_app.emit(
                     "conversion-progress",
                     ConversionProgressPayload {
                         job_id: "extract-audio".to_string(),
@@ -392,11 +412,17 @@ pub async fn extract_audio(
                 );
             }
             crate::ffmpeg::FfmpegEvent::Log(msg) => {
-                let _ = app_handle.emit(
+                let _ = audio_app.emit(
                     "conversion-log",
                     ConversionLogPayload { message: msg.clone() },
                 );
             }
+            _ => {}
+        }
+    })?;
+
+    for event in &events {
+        match event {
             crate::ffmpeg::FfmpegEvent::Done(path) => {
                 discord_rpc::track_conversion();
                 discord_rpc::set_idle();
@@ -409,6 +435,7 @@ pub async fn extract_audio(
                 discord_rpc::set_idle();
                 return Err(msg.clone());
             }
+            _ => {}
         }
     }
 
@@ -584,7 +611,7 @@ pub async fn start_batch_conversion(
                     },
                 );
                 let pass1_result: Result<(), String> = (|| {
-                    let evts = run_conversion(&pass1, eff_dur)?;
+                    let evts = run_conversion(&pass1, eff_dur, |_| {})?;
                     for e in &evts {
                         if let crate::ffmpeg::FfmpegEvent::Error(msg) = e {
                             return Err(msg.clone());
@@ -601,7 +628,22 @@ pub async fn start_batch_conversion(
             }
 
             let result: Result<(Vec<crate::ffmpeg::FfmpegEvent>, Option<String>), String> = (|| {
-                let evts = run_conversion(&pass2, eff_dur)?;
+                let pass2_cb_app = app_handle.clone();
+                let pass2_cb_fname = file_name.clone();
+                let evts = run_conversion(&pass2, eff_dur, move |ev| {
+                    if let crate::ffmpeg::FfmpegEvent::Progress(p) = ev {
+                        let _ = pass2_cb_app.emit(
+                            "batch-progress",
+                            BatchProgressPayload {
+                                total,
+                                done: done + done_offset,
+                                failed,
+                                current_file: pass2_cb_fname.clone(),
+                                file_progress: *p,
+                            },
+                        );
+                    }
+                })?;
                 let out = evts.iter().find_map(|e| {
                     if let crate::ffmpeg::FfmpegEvent::Done(p) = e {
                         Some(p.clone())
@@ -621,7 +663,22 @@ pub async fn start_batch_conversion(
             // ── Normal quality mode ──
             let args = build_args(&single_params);
             let result: Result<(Vec<crate::ffmpeg::FfmpegEvent>, Option<String>), String> = (|| {
-                let evts = run_conversion(&args, duration)?;
+                let norm_cb_app = app_handle.clone();
+                let norm_cb_fname = file_name.clone();
+                let evts = run_conversion(&args, duration, move |ev| {
+                    if let crate::ffmpeg::FfmpegEvent::Progress(p) = ev {
+                        let _ = norm_cb_app.emit(
+                            "batch-progress",
+                            BatchProgressPayload {
+                                total,
+                                done: done + done_offset,
+                                failed,
+                                current_file: norm_cb_fname.clone(),
+                                file_progress: *p,
+                            },
+                        );
+                    }
+                })?;
                 let out = evts.iter().find_map(|e| {
                     if let crate::ffmpeg::FfmpegEvent::Done(p) = e {
                         Some(p.clone())
@@ -637,29 +694,9 @@ pub async fn start_batch_conversion(
         let result: Result<(), String> = (|| {
             for event in &events {
                 match event {
-                    crate::ffmpeg::FfmpegEvent::Progress(p) => {
-                        discord_rpc::set_batch(&file_name, done + done_offset + 1, total, *p);
-                        let _ = app_handle.emit(
-                            "batch-progress",
-                            BatchProgressPayload {
-                                total,
-                                done: done + done_offset,
-                                failed,
-                                current_file: file_name.clone(),
-                                file_progress: *p,
-                            },
-                        );
-                    }
-                    crate::ffmpeg::FfmpegEvent::Log(msg) => {
-                        let _ = app_handle.emit(
-                            "batch-log",
-                            ConversionLogPayload {
-                                message: msg.clone(),
-                            },
-                        );
-                    }
                     crate::ffmpeg::FfmpegEvent::Done(_) => return Ok(()),
                     crate::ffmpeg::FfmpegEvent::Error(msg) => return Err(msg.clone()),
+                    _ => {}
                 }
             }
             Ok(())

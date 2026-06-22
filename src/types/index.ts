@@ -32,6 +32,16 @@ export interface ConversionParams {
   fade_in?: number;
   /** Audio fade-out duration (seconds) */
   fade_out?: number;
+
+  // ── Subtitle burn-in fields ──
+  /** Path to subtitle file (.srt/.vtt/.ass) for burn-in */
+  subtitle_path?: string;
+  /** Subtitle mode: "burn" triggers burn-in via start_conversion */
+  subtitle_mode?: SubtitleMode;
+  /** Styling for burned-in subtitles (force_style) */
+  subtitle_style?: SubtitleStyle;
+  /** ISO language tag for embedded subtitles */
+  subtitle_lang?: string;
 }
 
 /**
@@ -271,6 +281,45 @@ export interface DownloadProgress {
   progress: number;
   downloadedBytes: number;
   totalBytes: number;
+}
+
+// ── Subtitle Operations (Burn / Embed / Extract) ──
+
+export type SubtitleMode = "transcribe" | "burn" | "embed" | "extract" | "edit";
+
+/** Recovery data for the transcript editor auto-save feature. */
+export interface TranscriptEditorRecovery {
+  cues: Cue[];
+  filePath?: string;
+  videoPath?: string;
+  savedAt: number;
+}
+
+/** ASS subtitle styling parameters for burn-in via `force_style`. */
+export interface SubtitleStyle {
+  /** Font family name, e.g. "Arial" */
+  fontName?: string;
+  /** Font size in points (default 24) */
+  fontSize?: number;
+  /** Primary text colour in ASS hex, e.g. "&H00FFFFFF" */
+  primaryColor?: string;
+  /** Outline colour in ASS hex, e.g. "&H00000000" */
+  outlineColor?: string;
+  /** Outline width in pixels (default 2) */
+  outlineWidth?: number;
+  /** Vertical margin from bottom in pixels (default 40) */
+  marginV?: number;
+  /** ASS numpad alignment: 1-9 (default 2 = bottom-centre) */
+  alignment?: number;
+  /** Bold: 0 = normal, 1 = bold (default 0) */
+  bold?: number;
+  /** Background/box colour in ASS hex, e.g. "&H80000000" for semi-transparent black */
+  backColor?: string;
+}
+
+export interface SubtitleOpResult {
+  jobId: string;
+  outputPath: string;
 }
 
 

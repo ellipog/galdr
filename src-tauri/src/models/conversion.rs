@@ -116,6 +116,10 @@ impl Default for ConversionParams {
             audio_normalize: None,
             fade_in: None,
             fade_out: None,
+            subtitle_path: None,
+            subtitle_mode: None,
+            subtitle_style: None,
+            subtitle_lang: None,
         }
     }
 }

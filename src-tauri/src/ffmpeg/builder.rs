@@ -330,6 +330,26 @@ pub fn build_args(params: &ConversionParams) -> Vec<String> {
         }
     }
 
+    // ── Subtitle burn-in ──
+    // When subtitle_mode == "burn" and a subtitle file is set, append a
+    // `subtitles=` filter to the chain. This MUST run after every geometric
+    // filter (scale/crop/rotate) so the subtitles render onto the final
+    // frame. SRT/VTT inputs are converted to ASS in a temp file so we can
+    // inject styling via `force_style`; native ASS files are used as-is.
+    if params.subtitle_mode.as_deref() == Some("burn") {
+        if let Some(sub_path) = &params.subtitle_path {
+            match build_subtitle_filter(sub_path, params.subtitle_style.as_ref()) {
+                Ok(filter) => filter_parts.push(filter),
+                Err(e) => {
+                    // Surface as a fatal arg error — FFmpeg will fail loudly
+                    // rather than silently producing a video with no subs.
+                    args.push("-vf".to_string());
+                    args.push(format!("__subtitle_error={}__", e));
+                }
+            }
+        }
+    }
+
     // Remaining filter parts (if not already consumed by GIF)
     if !filter_parts.is_empty() {
         args.push("-vf".to_string());
@@ -447,6 +467,96 @@ fn maybe_mono(args: &mut Vec<String>, quality: f64) {
         args.push("-ac".to_string());
         args.push("1".to_string());
     }
+}
+
+// ── Subtitle burn-in helpers ──
+
+/// Escape a filesystem path for FFmpeg's `subtitles=` filter.
+///
+/// The filtergraph parser treats `:`, `,`, `[`, `]`, `;`, `\`, and `'` as
+/// special. The robust, widely-used recipe on Windows is:
+///   1. flip backslashes to forward slashes (FFmpeg accepts both)
+///   2. backslash-escape the colon that follows a drive letter (`C:` → `C\:`)
+///   3. wrap the whole thing in single quotes so spaces and commas survive
+/// Single quotes inside the path are escaped shell-style as `'\''`.
+pub(crate) fn escape_subtitle_path(path: &str) -> String {
+    let forward = path.replace('\\', "/");
+    // Escape only the drive-letter colon ("C:") — other colons are rare in
+    // real paths but would be caught by the same rule harmlessly.
+    let escaped_colon = regex::Regex::new(r"^([a-zA-Z]):").unwrap();
+    let drive_fixed = escaped_colon.replace_all(&forward, "$1\\:").to_string();
+    // Quote and escape any embedded single quotes.
+    let quoted = drive_fixed.replace('\'', "'\\''");
+    format!("'{}'", quoted)
+}
+
+/// Build the `subtitles=...:force_style='...'` filter string for burn-in.
+///
+/// SRT and VTT inputs are converted to ASS first (into the OS temp dir) so
+/// that `force_style` can override formatting — libass only honours
+/// `force_style` on ASS sources. Native `.ass` files are passed through
+/// directly. Returns the full filter clause ready to append to a `-vf` chain.
+pub(crate) fn build_subtitle_filter(
+    sub_path: &std::path::Path,
+    style: Option<&crate::models::SubtitleStyle>,
+) -> Result<String, String> {
+    let ext = sub_path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    // ASS is the only format that accepts force_style directly; for SRT/VTT
+    // we pre-convert to ASS with `ffmpeg -i sub.srt -f ass sub.ass`.
+    let effective_path: std::path::PathBuf = if ext == "ass" {
+        sub_path.to_path_buf()
+    } else {
+        let temp = std::env::temp_dir().join("galdr-subs");
+        std::fs::create_dir_all(&temp)
+            .map_err(|e| format!("create temp dir: {}", e))?;
+        let stem = sub_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("subs");
+        let ass_path = temp.join(format!("{}.ass", stem));
+
+        let ffmpeg = crate::ffmpeg::ffmpeg_path();
+        let mut cmd = std::process::Command::new(ffmpeg);
+        cmd.args(["-y", "-i"])
+            .arg(sub_path)
+            .arg("-f")
+            .arg("ass");
+        // Discard any embedded styling so our force_style is authoritative.
+        cmd.arg(&ass_path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        cmd.status()
+            .map_err(|e| format!("run ffmpeg for subtitle conversion: {}", e))?;
+        if !ass_path.exists() {
+            return Err("subtitle conversion to ASS produced no file".to_string());
+        }
+        ass_path
+    };
+
+    let escaped = escape_subtitle_path(&effective_path.to_string_lossy());
+    let mut filter = format!("subtitles={}", escaped);
+
+    // force_style only has effect on ASS sources, so always emit it for the
+    // converted path. Wrap the style value in single quotes so commas inside
+    // it (Fontname=Foo,Bar) don't split into separate filter options.
+    if let Some(style) = style {
+        let style_str = style.to_force_style();
+        if !style_str.is_empty() {
+            filter.push_str(&format!(":force_style='{}'", style_str));
+        }
+    }
+
+    Ok(filter)
 }
 
 // ── Target-size / two-pass encoding helpers ──
@@ -824,5 +934,82 @@ mod tests {
         let args = build_args(&params);
         let af = flag_value(&args, "-af").unwrap();
         assert!(af.contains("afade=t=in:st=0:d=2"), "fade-in should emit afade=t=in:st=0:d=2");
+    }
+
+    // ── Subtitle burn-in ──
+
+    #[test]
+    fn test_escape_subtitle_path_forward_slash() {
+        // Backslashes flip to forward slashes.
+        let escaped = escape_subtitle_path("C:\\Users\\me\\sub.srt");
+        assert!(escaped.contains("C\\:/Users/me/sub.srt"), "drive colon escaped, slashes forward: {}", escaped);
+    }
+
+    #[test]
+    fn test_escape_subtitle_path_unix() {
+        let escaped = escape_subtitle_path("/home/me/sub.srt");
+        assert_eq!(escaped, "'/home/me/sub.srt'");
+    }
+
+    #[test]
+    fn test_escape_subtitle_path_quoted() {
+        // Whole path is wrapped in single quotes.
+        let escaped = escape_subtitle_path("sub.srt");
+        assert!(escaped.starts_with('\'') && escaped.ends_with('\''));
+    }
+
+    #[test]
+    fn test_build_subtitle_filter_ass_passthrough() {
+        // Native ASS files are passed through without conversion.
+        let filter = build_subtitle_filter(
+            std::path::Path::new("subs.ass"),
+            None,
+        )
+        .expect("ASS passthrough should succeed");
+        assert!(filter.starts_with("subtitles='"), "filter should start with subtitles=: {}", filter);
+        assert!(!filter.contains("force_style"), "no style → no force_style");
+    }
+
+    #[test]
+    fn test_build_subtitle_filter_with_style() {
+        let style = crate::models::SubtitleStyle {
+            font_size: Some(30),
+            primary_color: Some("&H00FFFFFF".to_string()),
+            ..Default::default()
+        };
+        let filter = build_subtitle_filter(std::path::Path::new("subs.ass"), Some(&style))
+            .expect("styled ASS should succeed");
+        assert!(filter.contains("force_style='"), "style should be present: {}", filter);
+        assert!(filter.contains("FontSize=30"), "font size in force_style");
+        assert!(filter.contains("PrimaryColour=&H00FFFFFF"), "primary colour in force_style");
+    }
+
+    #[test]
+    fn test_build_subtitle_filter_missing_srt_errors() {
+        // SRT that doesn't exist → conversion fails → Err.
+        let res = build_subtitle_filter(std::path::Path::new("definitely_nonexistent_file.srt"), None);
+        assert!(res.is_err(), "missing SRT should error, not silently pass through");
+    }
+
+    #[test]
+    fn test_subtitle_burn_emits_vf_filter() {
+        // End-to-end: burn mode + ASS path → -vf contains subtitles=.
+        let mut params = make_params("mp4", Some(0.5));
+        params.subtitle_mode = Some("burn".to_string());
+        params.subtitle_path = Some(PathBuf::from("subs.ass"));
+        let args = build_args(&params);
+        let vf = flag_value(&args, "-vf").expect("burn mode should emit -vf");
+        assert!(vf.contains("subtitles="), "burn mode should add subtitles filter: {}", vf);
+    }
+
+    #[test]
+    fn test_no_subtitle_filter_without_mode() {
+        // No subtitle_mode → no subtitles= in the filter chain.
+        let params = make_params("mp4", Some(0.5));
+        let args = build_args(&params);
+        // -vf may or may not be present, but it must never contain subtitles=.
+        if let Some(vf) = flag_value(&args, "-vf") {
+            assert!(!vf.contains("subtitles="), "no burn mode → no subtitles filter");
+        }
     }
 }

@@ -4,6 +4,8 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Emitter;
 
+use base64::Engine;
+
 use crate::whisper::{
     self, find_model, list_models, require_installed_model, run_whisper, run_whisper_streaming,
     WhisperEvent, WhisperModel,
@@ -601,4 +603,586 @@ pub fn whisper_status() -> serde_json::Value {
         "models": list_models(),
         "any_installed": list_models().iter().any(|m| m.installed),
     })
+}
+
+// ── Phase 2: embed / extract / convert subtitle format ──
+//
+// Burn-in is handled by `start_conversion` (it routes through build_args via
+// the subtitle_mode/subtitle_path fields). The three operations below need
+// arguments build_args can't express — multiple `-i` inputs, `-map` flags,
+// and container-specific subtitle codecs — so they get their own commands.
+// All three reuse `run_conversion` so they stream progress events tagged
+// with a job_id just like a normal convert.
+
+/// Codec that FFmpeg should use for an embedded subtitle track, by container.
+///
+/// MP4/MOV only support `mov_text` (a.k.a. tx3g) for soft subs — passing
+/// `ass` or `subrip` into an mp4 silently drops them. MKV is permissive and
+/// accepts both. WebM needs `webvtt`.
+fn embedded_subtitle_codec(container: &str) -> &'static str {
+    match container.to_lowercase().as_str() {
+        "mp4" | "m4v" | "mov" | "3gp" => "mov_text",
+        "webm" => "webvtt",
+        // MKV and everything else: keep the source codec, signalled by "copy".
+        _ => "copy",
+    }
+}
+
+/// Result returned by embed/extract/convert — mirrors ConversionDonePayload.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleOpResult {
+    pub job_id: String,
+    pub output_path: String,
+}
+
+#[tauri::command]
+pub async fn embed_subtitle(
+    app_handle: tauri::AppHandle,
+    input_path: String,
+    subtitle_path: String,
+    output_path: String,
+    lang: Option<String>,
+) -> Result<SubtitleOpResult, String> {
+    let input = Path::new(&input_path);
+    let out = PathBuf::from(&output_path);
+
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create output dir: {}", e))?;
+    }
+
+    let container = out
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| "mkv".to_string());
+    let sub_codec = embedded_subtitle_codec(&container);
+
+    let duration = crate::ffmpeg::probe_file(input)
+        .map(|info| info.duration)
+        .unwrap_or(0.0)
+        .max(1.0);
+
+    let file_name = input
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("video")
+        .to_string();
+    crate::discord_rpc::set_converting(&file_name, 0.0, &format!("embed-{}", container), None);
+
+    // Two inputs: the video (0) and the subtitle (1). Map all streams from
+    // the video, copy them, and add the subtitle stream as `-c:s <codec>`.
+    // `-map 0` keeps every original stream; `-map 1:s` pulls in the new one.
+    let mut args: Vec<String> = vec![
+        "-y".into(),
+        "-i".into(),
+        input_path.clone(),
+        "-i".into(),
+        subtitle_path.clone(),
+        "-map".into(),
+        "0".into(),
+        "-map".into(),
+        "1:s:0".into(),
+        "-c".into(),
+        "copy".into(),
+        "-c:s".into(),
+        sub_codec.into(),
+    ];
+
+    // Attach a language metadata tag to the embedded track when supplied.
+    if let Some(language) = &lang {
+        let tag = language.trim().to_lowercase();
+        if !tag.is_empty() {
+            args.push("-metadata:s:s:0".into());
+            args.push(format!("language={}", tag));
+        }
+    }
+
+    args.push(output_path.clone());
+
+    let events = run_conversion_with_log(&app_handle, &args, duration, "embed", &file_name)?;
+    let done = events
+        .iter()
+        .find_map(|ev| match ev {
+            crate::ffmpeg::FfmpegEvent::Done(p) => Some(p.clone()),
+            _ => None,
+        })
+        .unwrap_or(output_path);
+
+    crate::discord_rpc::track_conversion();
+    crate::discord_rpc::set_idle();
+    Ok(SubtitleOpResult {
+        job_id: "embed".to_string(),
+        output_path: done,
+    })
+}
+
+#[tauri::command]
+pub async fn extract_subtitle(
+    app_handle: tauri::AppHandle,
+    input_path: String,
+    output_path: String,
+    stream_index: Option<i32>,
+    output_format: String,
+) -> Result<SubtitleOpResult, String> {
+    let input = Path::new(&input_path);
+    let out = PathBuf::from(&output_path);
+
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create output dir: {}", e))?;
+    }
+
+    // Codec depends on the requested output format. `copy` would fail when
+    // the source is a bitmap format (pgssub/dvd_subtitle) — those need
+    // burning, not extraction — but for text formats this is a no-op mux.
+    let sub_codec = match output_format.to_lowercase().as_str() {
+        "srt" => "subrip",
+        "vtt" => "webvtt",
+        "ass" | "ssa" => "ass",
+        _ => "subrip",
+    };
+
+    let duration = crate::ffmpeg::probe_file(input)
+        .map(|info| info.duration)
+        .unwrap_or(0.0)
+        .max(1.0);
+
+    let file_name = input
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("video")
+        .to_string();
+    crate::discord_rpc::set_converting(&file_name, 0.0, &format!("extract-{}", output_format), None);
+
+    // `-map 0:s:<index>` selects a specific subtitle stream. Default to the
+    // first (0) when none is requested.
+    let idx = stream_index.unwrap_or(0);
+    let mut args: Vec<String> = vec![
+        "-y".into(),
+        "-i".into(),
+        input_path.clone(),
+        "-map".into(),
+        format!("0:s:{}", idx),
+        "-c:s".into(),
+        sub_codec.into(),
+    ];
+
+    args.push(output_path.clone());
+
+    let events = run_conversion_with_log(&app_handle, &args, duration, "extract", &file_name)?;
+    let done = events
+        .iter()
+        .find_map(|ev| match ev {
+            crate::ffmpeg::FfmpegEvent::Done(p) => Some(p.clone()),
+            _ => None,
+        })
+        .unwrap_or(output_path);
+
+    crate::discord_rpc::track_conversion();
+    crate::discord_rpc::set_idle();
+    Ok(SubtitleOpResult {
+        job_id: "extract".to_string(),
+        output_path: done,
+    })
+}
+
+#[tauri::command]
+pub async fn convert_subtitle_format(
+    input_path: String,
+    output_path: String,
+    output_format: String,
+) -> Result<SubtitleOpResult, String> {
+    let in_path = Path::new(&input_path);
+    let out = PathBuf::from(&output_path);
+
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create output dir: {}", e))?;
+    }
+
+    let sub_codec = match output_format.to_lowercase().as_str() {
+        "srt" => "subrip",
+        "vtt" => "webvtt",
+        "ass" | "ssa" => "ass",
+        _ => "subrip",
+    };
+
+    let ffmpeg = crate::ffmpeg::ffmpeg_path();
+    let mut cmd = Command::new(ffmpeg);
+    cmd.args(["-y", "-i"])
+        .arg(in_path)
+        .arg("-c:s")
+        .arg(sub_codec);
+    cmd.arg(&out)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd
+        .output()
+        .map_err(|e| format!("failed to run ffmpeg: {}", e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("subtitle conversion failed: {}", stderr.trim()));
+    }
+
+    Ok(SubtitleOpResult {
+        job_id: "convert-sub".to_string(),
+        output_path: output_path,
+    })
+}
+
+/// Shared runner wrapper for embed/extract that reuses `run_conversion` and
+/// surfaces progress + log events under a job_id, just like start_conversion.
+fn run_conversion_with_log<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    args: &[String],
+    duration: f64,
+    job_id: &str,
+    file_name: &str,
+) -> Result<Vec<crate::ffmpeg::FfmpegEvent>, String> {
+    use crate::ffmpeg::FfmpegEvent;
+
+    let emit_app = app_handle.clone();
+    let emit_jid = job_id.to_string();
+    let emit_fname = file_name.to_string();
+    let events = crate::ffmpeg::run_conversion(args, duration, move |ev| {
+        match ev {
+            FfmpegEvent::Progress(p) => {
+                crate::discord_rpc::set_converting(&emit_fname, *p, &emit_jid, None);
+                let _ = emit_app.emit(
+                    "subtitle-op-progress",
+                    serde_json::json!({ "jobId": emit_jid.clone(), "progress": p }),
+                );
+            }
+            FfmpegEvent::Log(msg) => {
+                let _ = emit_app.emit(
+                    "subtitle-op-log",
+                    serde_json::json!({ "jobId": emit_jid.clone(), "message": msg }),
+                );
+            }
+            _ => {}
+        }
+    })?;
+
+    // Surface the first error as Err.
+    for ev in &events {
+        if let FfmpegEvent::Error(msg) = ev {
+            crate::discord_rpc::set_idle();
+            return Err(msg.clone());
+        }
+    }
+    Ok(events)
+}
+
+/// Helper: mime type from image extension.
+fn mime_from_ext(path: &Path) -> &str {
+    match path.extension().and_then(|s| s.to_str()).unwrap_or("") {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "avif" => "image/avif",
+        _ => "image/png",
+    }
+}
+
+/// Parse an SRT/VTT timestamp (HH:MM:SS[,.]mmm) and return seconds as f64.
+fn parse_sub_ts(s: &str) -> Option<f64> {
+    // Normalise comma to dot for VTT vs SRT
+    let s = s.trim().replace(',', ".");
+    let parts: Vec<&str> = s.split(':').collect();
+    match parts.len() {
+        3 => {
+            let h: f64 = parts[0].parse().ok()?;
+            let m: f64 = parts[1].parse().ok()?;
+            let sec: f64 = parts[2].parse().ok()?;
+            Some(h * 3600.0 + m * 60.0 + sec)
+        }
+        2 => {
+            let m: f64 = parts[0].parse().ok()?;
+            let sec: f64 = parts[1].parse().ok()?;
+            Some(m * 60.0 + sec)
+        }
+        _ => None,
+    }
+}
+
+/// Read a subtitle file and extract all cue start times (in seconds).
+///
+/// Supports SRT, VTT, and ASS formats.
+fn extract_cue_starts(path: &Path) -> Vec<f64> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        "ass" | "ssa" => {
+            // ASS: Dialogue: layer,start,end,style,name,effect,text
+            // start format: 0:00:01.00  (H:MM:SS.cc)
+            content
+                .lines()
+                .filter_map(|line| {
+                    let line = line.trim();
+                    if !line.starts_with("Dialogue:") {
+                        return None;
+                    }
+                    // Split by commas — the 2nd and 3rd comma-separated fields are start,end
+                    // But ASS allows commas in the text... We need a smarter split.
+                    // Format: Dialogue: layer,start,end,style,name,effect,marginL,marginR,marginV,text
+                    // After "Dialogue:", split by commas, but text field is after the 9th comma.
+                    // For our purpose, just find the start time which is the 2nd field.
+                    let body = line.strip_prefix("Dialogue:").unwrap_or("");
+                    // Find the second comma-delimited field (start time).
+                    let mut comma_count = 0;
+                    let mut start_buf = String::new();
+                    for ch in body.chars() {
+                        if ch == ',' {
+                            comma_count += 1;
+                            if comma_count == 2 {
+                                break;
+                            }
+                            continue;
+                        }
+                        if comma_count == 1 {
+                            start_buf.push(ch);
+                        }
+                    }
+                    let start_str = start_buf.trim();
+                    if start_str.is_empty() {
+                        return None;
+                    }
+                    parse_sub_ts(start_str)
+                })
+                .collect()
+        }
+        _ => {
+            // SRT / VTT:  HH:MM:SS[,.]mmm --> HH:MM:SS[,.]mmm
+            // The timestamp arrow pattern appears on lines before the text.
+            let re = regex::Regex::new(
+                r"(\d{1,2}:\d{2}:\d{2}[,\.]\d{3})\s*-->\s*\d{1,2}:\d{2}:\d{2}[,\.]\d{3}",
+            )
+            .unwrap();
+            content
+                .lines()
+                .filter_map(|line| {
+                    let line = line.trim();
+                    if let Some(caps) = re.captures(line) {
+                        parse_sub_ts(caps.get(1)?.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        }
+    }
+}
+
+/// Find the cue start time nearest to `target` seconds.
+/// Returns `target` if no cues are available.
+fn nearest_cue_time(cues: &[f64], target: f64) -> f64 {
+    if cues.is_empty() {
+        return target;
+    }
+    // Binary search for the closest value
+    let mut best = cues[0];
+    let mut best_dist = (best - target).abs();
+    for &c in cues {
+        let d = (c - target).abs();
+        if d < best_dist {
+            best_dist = d;
+            best = c;
+        }
+    }
+    best
+}
+
+/// Generate a single-frame preview of subtitles burned into a video frame.
+///
+/// Uses the same `build_subtitle_filter` logic as the real burn-in so the
+/// preview accurately reflects what the final output will look like.
+/// The seek time is automatically adjusted to the nearest subtitle cue so
+/// the preview always shows a frame with visible subtitle text.
+/// Returns a base64 data URL suitable for use as an `<img src="...">`.
+#[tauri::command]
+pub fn preview_subtitle_burn(
+    input_path: String,
+    subtitle_path: String,
+    style: Option<crate::models::SubtitleStyle>,
+    seek_seconds: Option<f64>,
+) -> Result<String, String> {
+    let requested = seek_seconds.unwrap_or(60.0);
+
+    let sub_path = Path::new(&subtitle_path);
+    if !sub_path.exists() {
+        return Err(format!("subtitle file not found: {}", subtitle_path));
+    }
+
+    // Parse the subtitle file to find the cue nearest to the user's requested time.
+    let cues = extract_cue_starts(sub_path);
+    let seek = nearest_cue_time(&cues, requested) + 0.1;
+
+    // Build the subtitle filter string using the same logic as the real burn-in.
+    let filter = crate::ffmpeg::builder::build_subtitle_filter(
+        sub_path,
+        style.as_ref(),
+    )?;
+
+    // Temp output path (reuse galdr-previews convention from commands::preview).
+    let temp_dir = std::env::temp_dir().join("galdr-previews");
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("create temp dir: {}", e))?;
+
+    let uuid = uuid::Uuid::new_v4();
+    let out_path = temp_dir.join(format!("burn-preview-{}.png", uuid));
+    let out_str = out_path.to_string_lossy().to_string();
+
+    let ffmpeg = crate::ffmpeg::ffmpeg_path();
+
+    // Construct: ffmpeg -y -i <input> -ss <seek> -vf <filter> -vframes 1 -q:v 2 <out.png>
+    // Output seeking (-ss after -i) is slightly slower but frame-accurate, and
+    // ensures the subtitles filter has the correct PTS so text is rendered.
+    let mut cmd = Command::new(&ffmpeg);
+    cmd.arg("-y")
+        .arg("-i")
+        .arg(&input_path)
+        .args(["-ss", &seek.to_string()])
+        .arg("-vf")
+        .arg(&filter)
+        .args(["-vframes", "1", "-q:v", "2"])
+        .arg(&out_str)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    let status = cmd.status()
+        .map_err(|e| format!("failed to run ffmpeg for preview: {}", e))?;
+
+    if !status.success() || !out_path.exists() {
+        return Err("ffmpeg preview generation failed — no output frame produced".to_string());
+    }
+
+    // Read the PNG and return as base64 data URL.
+    let file = std::fs::File::open(&out_path)
+        .map_err(|e| format!("failed to open preview: {}", e))?;
+
+    let max_bytes = 10_000_000u64;
+    let mut buf = Vec::with_capacity(1024);
+    file.take(max_bytes)
+        .read_to_end(&mut buf)
+        .map_err(|e| format!("failed to read preview: {}", e))?;
+
+    if buf.is_empty() {
+        return Err("preview file is empty".to_string());
+    }
+
+    let mime = mime_from_ext(&out_path);
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&buf);
+
+    // Don't bother deleting the temp file — the OS will clean it up eventually
+    // and the temp dir is bounded by the uuid-based naming.
+
+    Ok(format!("data:{};base64,{}", mime, b64))
+}
+
+// ── Transcript Editor: file read/write + recovery ──
+
+/// Read the full text content of a subtitle file (SRT, VTT, ASS).
+/// Returns the raw text so the frontend can parse it into Cue[].
+#[tauri::command]
+pub fn read_subtitle_file(path: String) -> Result<String, String> {
+    let p = Path::new(&path);
+    if !p.exists() {
+        return Err(format!("file not found: {}", path));
+    }
+    std::fs::read_to_string(p)
+        .map_err(|e| format!("failed to read subtitle file: {}", e))
+}
+
+/// Write text content to a subtitle file. Overwrites if it exists.
+/// The frontend serialises its Cue[] to SRT/VTT text before calling this.
+#[tauri::command]
+pub fn save_subtitle_file(path: String, content: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if let Some(parent) = p.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create output dir: {}", e))?;
+    }
+    std::fs::write(p, &content)
+        .map_err(|e| format!("failed to write subtitle file: {}", e))
+}
+
+/// Recovery storage for the transcript editor auto-save feature.
+/// Maps to a single JSON file in the app data dir so unsaved editor work
+/// can be restored after a crash.
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+static SUBTITLE_RECOVERY: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
+
+#[tauri::command]
+pub fn recovery_save_subtitle_editor(data: String) -> Result<(), String> {
+    let path = recovery_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("failed to create recovery dir: {}", e))?;
+    }
+    std::fs::write(&path, &data)
+        .map_err(|e| format!("failed to save recovery: {}", e))?;
+    // Also keep in memory for instant retrieval.
+    if let Ok(mut slot) = SUBTITLE_RECOVERY.lock() {
+        *slot = Some(data);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn recovery_load_subtitle_editor() -> Option<String> {
+    // Try memory first.
+    if let Ok(slot) = SUBTITLE_RECOVERY.lock() {
+        if let Some(data) = slot.as_ref() {
+            return Some(data.clone());
+        }
+    }
+    // Fall back to disk.
+    let path = recovery_path();
+    if path.exists() {
+        std::fs::read_to_string(&path).ok()
+    } else {
+        None
+    }
+}
+
+#[tauri::command]
+pub fn recovery_clear_subtitle_editor() -> Result<(), String> {
+    if let Ok(mut slot) = SUBTITLE_RECOVERY.lock() {
+        *slot = None;
+    }
+    let path = recovery_path();
+    if path.exists() {
+        std::fs::remove_file(&path).ok();
+    }
+    Ok(())
+}
+
+fn recovery_path() -> PathBuf {
+    let base = std::env::temp_dir();
+    base.join("galdr-subtitle-recovery.json")
 }

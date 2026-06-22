@@ -144,6 +144,15 @@ pub fn run() {
             commands::transcribe_audio,
             commands::cancel_transcription,
             commands::whisper_status,
+            commands::embed_subtitle,
+            commands::extract_subtitle,
+            commands::convert_subtitle_format,
+            commands::preview_subtitle_burn,
+            commands::read_subtitle_file,
+            commands::save_subtitle_file,
+            commands::recovery_save_subtitle_editor,
+            commands::recovery_load_subtitle_editor,
+            commands::recovery_clear_subtitle_editor,
         ])
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {

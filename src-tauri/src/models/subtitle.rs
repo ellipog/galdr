@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// byte order with an alpha byte) — this is what FFmpeg's `force_style`
 /// expects, not the more familiar `#RRGGBB`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SubtitleStyle {
     /// Font family name, e.g. "Arial". Must be a font libass can resolve on
     /// the system; missing fonts fall back to a default.

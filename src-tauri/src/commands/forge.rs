@@ -150,7 +150,7 @@ pub async fn export_timeline(
                 "-pix_fmt".to_string(), "yuv420p".to_string(),
                 bpath.clone(),
             ];
-            run_conversion(&black_args, gap_dur)?;
+            run_conversion(&black_args, gap_dur, |_| {})?;
             vid_concat.push(format!("file '{}'", bpath.replace('\\', "\\\\")));
         }
 
@@ -188,7 +188,7 @@ pub async fn export_timeline(
             inter_path.clone(),
         ]);
 
-        run_conversion(&args, dur)?;
+        run_conversion(&args, dur, |_| {})?;
 
         vid_concat.push(format!("file '{}'", inter_path.replace('\\', "\\\\")));
         cursor = clip.start_time + clip.duration;
@@ -211,7 +211,7 @@ pub async fn export_timeline(
         "-c".to_string(), "copy".to_string(),
         vtemp.to_string_lossy().to_string(),
     ];
-    run_conversion(&merge_args, vclips.len() as f64)?;
+    run_conversion(&merge_args, vclips.len() as f64, |_| {})?;
 
     // ── 2. Render audio clips from audio track (no video) ──
 
@@ -250,7 +250,7 @@ pub async fn export_timeline(
                 seg_path.to_string_lossy().to_string(),
             ]);
 
-            run_conversion(&args, dur)?;
+            run_conversion(&args, dur, |_| {})?;
 
             let delay_ms = (clip.start_time * 1000.0) as u64;
             audio_inputs.push("-i".to_string());
@@ -277,7 +277,7 @@ pub async fn export_timeline(
                 atemp_path.to_string_lossy().to_string(),
             ]);
 
-            run_conversion(&mix_cmd, 1.0)?;
+            run_conversion(&mix_cmd, 1.0, |_| {})?;
             atemp = Some(atemp_path);
         }
     }
@@ -295,7 +295,7 @@ pub async fn export_timeline(
             "-shortest".to_string(),
             output_path.to_string_lossy().to_string(),
         ];
-        run_conversion(&final_args, 1.0)?;
+        run_conversion(&final_args, 1.0, |_| {})?;
     } else {
         std::fs::copy(&vtemp, &output_path).map_err(|e| e.to_string())?;
     }
@@ -401,7 +401,7 @@ pub async fn pre_render_timeline(
             inter_path.clone(),
         ]);
 
-        let events = run_conversion(&args, dur)?;
+        let events = run_conversion(&args, dur, |_| {})?;
         for event in &events {
             if let crate::ffmpeg::runner::FfmpegEvent::Error(e) = event {
                 return Err(format!("clip {} error: {}", i, e));
@@ -434,7 +434,7 @@ pub async fn pre_render_timeline(
         output_path.to_string_lossy().to_string(),
     ];
 
-    run_conversion(&merge_args, clips.len() as f64)?;
+    run_conversion(&merge_args, clips.len() as f64, |_| {})?;
 
     app_handle
         .emit("forge-render-progress", serde_json::json!({ "progress": 1.0 }))
