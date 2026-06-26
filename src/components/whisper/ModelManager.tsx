@@ -105,6 +105,9 @@ export default function ModelManager({ selectedId, onSelect, allowDelete = true 
                       <div className="whisper-model-name-row">
                         <span className="whisper-model-name">{m.label}</span>
                         <span className={`whisper-model-tier tier-${m.tier}`}>{TIER_LABEL[m.tier]}</span>
+                        {m.quantized && (
+                          <span className="whisper-model-quantized">Q</span>
+                        )}
                         {m.languageClass === "english-only" && (
                           <span className="whisper-model-lang">en-only</span>
                         )}

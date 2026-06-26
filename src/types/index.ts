@@ -194,19 +194,54 @@ export interface RecentFileEntry {
 
 export type WatchAction = "autoConvert" | "queue";
 
+/** Conflict resolution policy when an output file already exists. */
+export type ConflictPolicy = "skip" | "overwrite" | "rename";
+
+/** Outcome of a watched-file processing attempt. */
+export type WatchLogStatus = "success" | "skippedConflict" | "skippedAge" | "failed";
+
+/** A single output format target for a watch folder. */
+export interface WatchOutputFormat {
+  outputFormat: string;
+  quality?: number;
+  outputDir?: string;
+}
+
+/** A single entry in a watch folder's persistent processing history. */
+export interface WatchLogEntry {
+  inputPath: string;
+  outputPaths: string[];
+  status: WatchLogStatus;
+  timestamp: string;
+  error?: string;
+}
+
 export interface WatchFolderConfig {
   id: string;
   enabled: boolean;
   path: string;
-  /** Lowercase extensions without dot, e.g. ["mp4","mov"]. Empty = all. */
-  extensions: string[];
-  outputDir: string;
+  /** Glob patterns matched against filename, e.g. ["*.mp4","*_hq.*"]. Empty = all. */
+  patterns: string[];
+  /** Ignore files older than this many minutes. 0 = no limit. */
+  ignoreOlderThanMinutes: number;
+  /** Debounce window in milliseconds. Default 10000 (10s). */
+  settleMs: number;
   action: WatchAction;
-  /** Conversion preset applied on auto-convert (inputPath/outputDir overwritten). */
-  params: Partial<ConversionParams>;
+  /** One or more output formats to produce from each source file. */
+  outputFormats: WatchOutputFormat[];
+  outputDir: string;
+  /** What to do when an output file already exists. */
+  conflictPolicy: ConflictPolicy;
   deleteSource: boolean;
   recursive: boolean;
   preservePath: boolean;
+  /** Persistent processing history (most-recent-first). */
+  processingLog: WatchLogEntry[];
+  // ── Deprecated (kept for migration) ──
+  /** Deprecated: use patterns instead. */
+  extensions: string[];
+  /** Deprecated: use outputFormats[0] instead. */
+  params: Partial<ConversionParams>;
 }
 
 /** A file waiting in the manual-review queue (Queue-action folders). */
@@ -250,6 +285,10 @@ export interface WhisperModel {
   sizeBytes: number;
   languageClass: "multilingual" | "english-only";
   tier: "fast" | "balanced" | "accurate" | "best";
+  /** `true` if this is a quantized (Q5/Q8) variant of a full-precision model. */
+  quantized: boolean;
+  /** Family group used to cluster models in the picker dropdown, e.g. `"tiny"`, `"base"`, `"large-v3-turbo"`. */
+  category: string;
   description: string;
   installed: boolean;
 }

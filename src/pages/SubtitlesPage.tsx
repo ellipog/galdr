@@ -831,7 +831,7 @@ export default function SubtitlesPage() {
               options={models.map((m) => ({
                 value: m.id,
                 label: `${m.label}${m.installed ? "  ✓" : ""}`,
-                category: m.languageClass === "english-only" ? "english-only" : "multilingual",
+                category: m.category,
               }))}
               value={modelId}
               onChange={setModelId}

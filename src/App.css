@@ -3378,6 +3378,15 @@ body {
   border-color: var(--fg-dim);
 }
 
+.whisper-model-quantized {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--fg-dim);
+  border: 1px solid var(--fg-faint);
+  padding: 1px 6px;
+}
+
 .whisper-model-lang {
   font-size: 10px;
   letter-spacing: 0.05em;
